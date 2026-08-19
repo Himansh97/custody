@@ -98,7 +98,7 @@ def cmd_keygen(args) -> int:
 
 def cmd_run(args) -> int:
     """One real decision, against real documents, recorded end to end."""
-    from .adapters import anthropic_extractor, replay
+    from .adapters import anthropic_extractor, azure_openai_extractor, replay
     from .ledger import Ledger
 
     documents: list[tuple[str, str]] = []
@@ -112,6 +112,12 @@ def cmd_run(args) -> int:
         fixture = json.loads(pathlib.Path(args.replay).read_text())
         extract = replay(fixture.get("fields", {}), fixture.get("confidence"),
                          fixture.get("citations"))
+    elif args.provider == "azure-openai":
+        extract = azure_openai_extractor(
+            deployment=args.deployment or args.model,
+            endpoint=args.azure_endpoint,
+            api_version=args.api_version,
+        )
     else:
         extract = anthropic_extractor(model=args.model)
 
@@ -120,7 +126,10 @@ def cmd_run(args) -> int:
     with ledger.decision(loan=args.loan, principal=args.principal, purpose=args.purpose,
                          identifiers=args.redact or ()) as d:
         fields, confidence, endpoint, citations = extract(args.instruction, documents)
-        d.call(model=args.model, endpoint=endpoint, prompt=args.instruction,
+        # `endpoint` carries the version that actually answered. Recording the
+        # flag the operator typed instead would be recording an intention.
+        recorded_model = endpoint.rsplit(":", 1)[-1] if ":" in endpoint else args.model
+        d.call(model=recorded_model, endpoint=endpoint, prompt=args.instruction,
                sources=[text for _, text in documents], response=fields)
         verdict = d.gate(fields, citations=citations, confidence=confidence,
                          confidence_floor=args.floor)
@@ -263,7 +272,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--instruction", required=True, help="what to ask the model")
     p.add_argument("--doc", action="append", required=True, metavar="PATH",
                    help="a source document; repeat for several")
+    p.add_argument("--provider", default="anthropic",
+                   choices=["anthropic", "azure-openai"])
     p.add_argument("--model", default="claude-sonnet-5")
+    p.add_argument("--deployment", default=None,
+                   help="azure-openai: the deployment name (Azure routes on this, "
+                        "not on a model name)")
+    p.add_argument("--azure-endpoint", default=None,
+                   help="defaults to AZURE_OPENAI_ENDPOINT")
+    p.add_argument("--api-version", default="2024-10-21")
     p.add_argument("--replay", metavar="JSON",
                    help="use a fixed response instead of calling a model")
     p.add_argument("--redact", action="append", metavar="NAME",

@@ -87,6 +87,37 @@ re-verify in a visitor's own browser.
 Storage is append-only, enforced by SQLite triggers rather than by convention,
 and appends are atomic so concurrent writers cannot fork the chain.
 
+## Which model you call
+
+Custody wraps a call you already make; it does not choose your model. Adapters
+ship for Anthropic and **Azure OpenAI**, and an adapter is just a callable
+returning `(fields, confidence, endpoint, citations)` — write your own in twenty
+lines if neither fits.
+
+```bash
+export AZURE_OPENAI_ENDPOINT=https://acme-uw.openai.azure.com/
+custody run --provider azure-openai --deployment gpt-4o-prod \
+    --loan 1000254 --principal you@lender.com \
+    --instruction "Extract qualifying monthly income." --doc paystub.txt
+```
+
+With no `AZURE_OPENAI_API_KEY` set it authenticates with **managed identity** —
+no stored key to leak, rotate, or find in a config file in three years.
+
+**It records the model version, not the deployment name.** Azure routes on a
+deployment, and the model behind that deployment can be changed by an
+auto-update policy or by somebody in the portal without a line of your code
+changing. A record saying `gpt-4o-prod` therefore does not identify what made the
+decision. The response carries the real version, so that is what lands in the
+ledger, with the deployment and the resource kept alongside:
+
+```
+endpoint  azure-openai:acme-uw:gpt-4o-prod:gpt-4o-2024-11-20
+```
+
+When an examiner asks which model produced a figure eighteen months ago, that is
+the difference between an answer and a shrug.
+
 ## Where the signing key lives
 
 A key in a file is a development convenience, and the first thing a lender's
