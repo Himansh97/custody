@@ -1,0 +1,8 @@
+FORM W-2 WAGE AND TAX STATEMENT — TAX YEAR 2025
+Employer: ACME LOGISTICS LLC        EIN: 75-3310042
+------------------------------------------------------------------
+Box  1  Wages, tips, other compensation          98,410.00
+Box  2  Federal income tax withheld              16,229.00
+Box  3  Social Security wages                    98,410.00
+Box  5  Medicare wages and tips                  98,410.00
+Box 12  D  401(k) elective deferrals              7,200.00

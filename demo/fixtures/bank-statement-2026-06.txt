@@ -1,0 +1,11 @@
+NORTHWIND CREDIT UNION — STATEMENT OF ACCOUNT
+Statement period: 06/01/2026 - 06/30/2026
+Account ending: 4471
+------------------------------------------------------------------
+Beginning balance                                18,204.11
+Total deposits                                    6,380.48
+Total withdrawals                                 4,912.30
+Ending balance                                   19,672.29
+------------------------------------------------------------------
+06/15  DIRECT DEP  ACME LOGISTICS PAYROLL         3,190.24
+06/30  DIRECT DEP  ACME LOGISTICS PAYROLL         3,190.24

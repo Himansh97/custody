@@ -1,0 +1,562 @@
+<title>Custody</title>
+<style>
+/* ---------------------------------------------------------------- tokens
+   Light is the base. Dark redefines only values, twice: once for the
+   unstamped (system) state, once for an explicit data-theme. No colour is
+   ever declared outside :root. */
+:root{
+  color-scheme:light;
+  --paper:#FAFAF8;
+  --panel:#F3F2ED;
+  --ink:#16161A;
+  --ink-soft:#55554F;
+  --ink-faint:#8C8B84;
+  --rule:#CFCEC4;
+  --rule-soft:#E4E3DB;
+  --red:#D92906;
+  --amber:#8A5D00;
+  --green:#1B6B4C;
+  --green-wash:#E8F1EC;
+  --red-wash:#FBEAE6;
+  --amber-wash:#F7F0DE;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --paper:#0E0E12;
+    --panel:#16161C;
+    --ink:#E9E8E2;
+    --ink-soft:#A3A29B;
+    --ink-faint:#6B6A65;
+    --rule:#26262E;
+    --rule-soft:#1C1C23;
+    --red:#FF5232;
+    --amber:#E0A93B;
+    --green:#4FBE8B;
+    --green-wash:#12241C;
+    --red-wash:#2A1512;
+    --amber-wash:#251E10;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#0E0E12;
+  --panel:#16161C;
+  --ink:#E9E8E2;
+  --ink-soft:#A3A29B;
+  --ink-faint:#6B6A65;
+  --rule:#26262E;
+  --rule-soft:#1C1C23;
+  --red:#FF5232;
+  --amber:#E0A93B;
+  --green:#4FBE8B;
+  --green-wash:#12241C;
+  --red-wash:#2A1512;
+  --amber-wash:#251E10;
+}
+:root{
+  --display:"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --gut:clamp(18px,4vw,56px);
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--display);font-size:16px;line-height:1.55;
+  overflow-x:hidden;-webkit-font-smoothing:antialiased;
+}
+:focus-visible{outline:2px solid var(--red);outline-offset:3px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 var(--gut)}
+
+/* ------------------------------------------------------------- masthead */
+header.top{padding:clamp(28px,5vw,58px) 0 clamp(24px,4vw,40px);border-bottom:1px solid var(--rule)}
+.eyebrow{
+  font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--ink-faint);margin:0;
+}
+h1{
+  font-weight:700;font-size:clamp(30px,5vw,54px);line-height:1.04;letter-spacing:-.03em;
+  margin:14px 0 0;max-width:20ch;text-wrap:balance;
+}
+.lede{max-width:64ch;font-size:clamp(16px,1.4vw,19px);color:var(--ink-soft);margin:20px 0 0}
+.mandate{
+  margin:26px 0 0;padding:16px 20px;border-left:2px solid var(--red);
+  background:var(--panel);max-width:72ch;
+}
+.mandate p{margin:0;font-size:14px;line-height:1.6}
+.mandate code{font-family:var(--mono);font-size:13px}
+.mandate .cite{
+  display:block;margin-top:10px;font-family:var(--mono);font-size:10px;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);
+}
+
+/* ------------------------------------------------------------ verify bar */
+.verify{
+  display:flex;flex-wrap:wrap;gap:14px 20px;align-items:center;justify-content:space-between;
+  padding:18px 20px;margin:clamp(26px,4vw,40px) 0 0;
+  border:1px solid var(--rule);border-radius:3px;background:var(--panel);
+}
+.status{display:flex;align-items:center;gap:12px;min-width:0}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--ink-faint);flex:none}
+.status.ok .dot{background:var(--green)}
+.status.bad .dot{background:var(--red)}
+.status-text{font-family:var(--mono);font-size:12.5px;line-height:1.45}
+.status.ok .status-text strong{color:var(--green)}
+.status.bad .status-text strong{color:var(--red)}
+.status-text span{display:block;color:var(--ink-faint);font-size:11px;margin-top:3px}
+.controls{display:flex;flex-wrap:wrap;gap:8px}
+button{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-soft);background:transparent;border:1px solid var(--rule);
+  border-radius:2px;padding:9px 14px;cursor:pointer;
+}
+button:hover:not(:disabled){color:var(--ink);border-color:var(--ink-faint)}
+button:disabled{opacity:.4;cursor:default}
+button.danger{color:var(--red);border-color:var(--red)}
+button.primary{color:var(--ink);border-color:var(--ink-faint)}
+
+/* ---------------------------------------------------------------- chain */
+section{padding:clamp(34px,5vw,56px) 0;border-bottom:1px solid var(--rule)}
+h2{
+  font-family:var(--mono);font-size:11px;font-weight:400;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--ink-faint);margin:0 0 6px;
+}
+.sub{margin:0 0 24px;color:var(--ink-soft);max-width:66ch;font-size:15px}
+
+.chain{display:grid;gap:1px;background:var(--rule-soft);border:1px solid var(--rule)}
+.rec{
+  display:grid;
+  grid-template-columns:34px 1fr 108px 150px;
+  gap:14px;align-items:center;
+  background:var(--paper);padding:13px 16px;
+  cursor:pointer;text-align:left;width:100%;
+  border:0;border-radius:0;font-family:var(--display);
+  letter-spacing:normal;text-transform:none;font-size:15px;color:var(--ink);
+}
+.rec:hover{background:var(--panel)}
+.rec[aria-selected="true"]{background:var(--panel);box-shadow:inset 2px 0 0 var(--ink)}
+.rec.broken{background:var(--red-wash)}
+.rec .n{font-family:var(--mono);font-size:12px;color:var(--ink-faint);font-variant-numeric:tabular-nums}
+.rec .what{min-width:0}
+.rec .what b{display:block;font-weight:600;font-size:15px;letter-spacing:-.005em}
+.rec .what span{
+  display:block;font-family:var(--mono);font-size:11px;color:var(--ink-faint);
+  margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.badge{
+  font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  padding:4px 8px;border-radius:2px;text-align:center;white-space:nowrap;
+}
+.b-pass{background:var(--green-wash);color:var(--green)}
+.b-reject{background:var(--red-wash);color:var(--red)}
+.b-review{background:var(--amber-wash);color:var(--amber)}
+.b-human{background:var(--panel);color:var(--ink-soft);border:1px solid var(--rule)}
+.rec .hash{
+  font-family:var(--mono);font-size:11px;color:var(--ink-faint);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+@media (max-width:720px){
+  .rec{grid-template-columns:26px 1fr auto;gap:10px}
+  .rec .hash{display:none}
+}
+
+/* --------------------------------------------------------------- detail */
+.detail{margin-top:22px;border:1px solid var(--rule);border-radius:3px;overflow:hidden}
+.detail-head{
+  padding:14px 18px;background:var(--panel);border-bottom:1px solid var(--rule);
+  display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between;
+}
+.detail-head b{font-size:15px}
+.detail-head code{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+.fields{display:grid;grid-template-columns:190px 1fr;gap:1px;background:var(--rule-soft)}
+.fields dt,.fields dd{background:var(--paper);margin:0;padding:11px 18px;font-size:14px}
+.fields dt{
+  font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-faint);
+}
+.fields dd{font-family:var(--mono);font-size:12.5px;word-break:break-word}
+.fields dt.req::after{content:" *";color:var(--red)}
+.fields dd.null{color:var(--ink-faint);font-style:italic}
+@media (max-width:640px){
+  .fields{grid-template-columns:1fr}
+  .fields dt{padding-bottom:0;background:var(--paper)}
+}
+.findings{padding:14px 18px;border-top:1px solid var(--rule);background:var(--red-wash)}
+.findings.review{background:var(--amber-wash)}
+.findings p{margin:0;font-size:13.5px;line-height:1.55}
+.findings p+p{margin-top:8px}
+.findings code{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+
+/* --------------------------------------------------------------- packet */
+.grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+  background:var(--rule-soft);border:1px solid var(--rule);
+}
+.cell{background:var(--paper);padding:18px}
+.cell .k{
+  display:block;font-family:var(--mono);font-size:clamp(20px,2.4vw,28px);
+  letter-spacing:-.02em;font-variant-numeric:tabular-nums;
+}
+.cell .v{display:block;margin-top:6px;font-size:13px;color:var(--ink-soft);line-height:1.4}
+.cell.ok .k{color:var(--green)}
+.cell.warn .k{color:var(--amber)}
+
+.note{margin:24px 0 0;max-width:66ch;color:var(--ink-soft);font-size:15px}
+.note strong{color:var(--ink)}
+
+footer{padding:clamp(30px,5vw,52px) 0 clamp(46px,8vw,80px);max-width:70ch}
+footer h3{
+  font-family:var(--mono);font-size:11px;font-weight:400;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--ink-faint);margin:0 0 12px;
+}
+footer p{margin:0 0 14px;font-size:14.5px;color:var(--ink-soft);line-height:1.6}
+footer a{color:inherit}
+.foot-meta{
+  margin-top:26px;padding-top:18px;border-top:1px solid var(--rule);
+  font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink-faint);
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">Custody</p>
+  <h1>Prove what your AI did to a loan.</h1>
+  <p class="lede">
+    Every AI decision on a loan file is recorded, gated, and chained &mdash; so when an
+    examiner, an investor, or a GSE counterparty asks what happened, the answer is
+    an artifact they can verify themselves rather than an assurance they have to
+    accept.
+  </p>
+  <div class="mandate">
+    <p>
+      <strong>Fannie Mae Lender Letter LL-2026-04</strong> took effect on 8 August 2026.
+      Seller/servicers using AI or ML in origination, underwriting, servicing or QC
+      must keep a per-decision record of
+      <code>principal, model, endpoint, redacted prompt, response treatment, policy
+      version, decision outcome</code> and <code>timestamp</code> &mdash; append-only and
+      signed, queryable by loan, date, model and principal. Enforcement is repurchase
+      risk.
+    </p>
+    <span class="cite">The ledger below is a real one, produced by the library in this project</span>
+  </div>
+</header>
+
+<section>
+  <h2>The chain</h2>
+  <p class="sub">
+    One synthetic loan file through five AI steps. Everything here &mdash; borrower,
+    employer, documents, loan number &mdash; is fabricated. The hashes are not: your
+    browser recomputes every one of them from the record contents when you press
+    verify.
+  </p>
+
+  <div class="verify">
+    <div class="status" id="status">
+      <span class="dot"></span>
+      <span class="status-text"><strong id="statusMain">Not yet verified</strong>
+        <span id="statusSub">Press verify to recompute the chain in your browser</span></span>
+    </div>
+    <div class="controls">
+      <button class="primary" id="btnVerify">Verify chain</button>
+      <button class="danger" id="btnTamper">Tamper with record 1</button>
+      <button id="btnRestore" disabled>Restore</button>
+    </div>
+  </div>
+
+  <div class="chain" id="chain" role="listbox" aria-label="Ledger records"></div>
+
+  <div class="detail" id="detail" hidden>
+    <div class="detail-head">
+      <b id="dTitle"></b>
+      <code id="dId"></code>
+    </div>
+    <dl class="fields" id="dFields"></dl>
+    <div class="findings" id="dFindings" hidden></div>
+  </div>
+
+  <p class="note" id="tamperNote" hidden></p>
+</section>
+
+<section>
+  <h2>What an examiner receives</h2>
+  <p class="sub">
+    The packet for one loan: every decision, in order, including the ones that were
+    rejected. It carries the public key and the records, so the recipient verifies it
+    without access to any of the lender&rsquo;s systems.
+  </p>
+  <div class="grid" id="packet"></div>
+  <p class="note" id="packetNote"></p>
+</section>
+
+<footer>
+  <h3>What this is, and what it is not</h3>
+  <p>
+    <strong>It is</strong> a Python library and an append-only, hash-chained,
+    Ed25519-signed ledger that captures every field LL-2026-04 names, plus a
+    deterministic gate that decides the <code>response_treatment</code> on each output:
+    figures must appear in a source document, fields must cite one, classifications must
+    land in a closed set, and anything under the confidence floor goes to a person.
+  </p>
+  <p>
+    <strong>It is not</strong> legal advice and does not certify compliance. It does no
+    bias or fair-lending testing &mdash; that is a separate obligation and a separate
+    product. It writes to no loan origination system. And there is no model anywhere in
+    the verification path: a model judging another model is not evidence.
+  </p>
+  <p class="foot-meta" id="footMeta"></p>
+</footer>
+
+</div>
+
+<script id="ledger-data" type="application/json">__LEDGER_JSON__</script>
+<script>
+(function(){
+"use strict";
+
+var BUNDLE = JSON.parse(document.getElementById("ledger-data").textContent);
+var LOAN = Object.keys(BUNDLE.packets)[0];
+
+/* The eight fields the mandate names. Marked in the detail view so a reader can
+   check the claim against the letter rather than take our word for it. */
+var MANDATE = ["principal","model","endpoint","prompt_redacted",
+               "response_treatment","policy_version","decision_outcome","timestamp"];
+
+var CHAIN_FIELDS = {prev_hash:1, hash:1, signature:1};
+var GENESIS = "0000000000000000000000000000000000000000000000000000000000000000";
+/* Built from an ASCII string so this file carries no literal control characters. */
+var NON_ASCII = new RegExp("[\\u0080-\\uFFFF]", "g");
+
+/* ---- canonical form -------------------------------------------------------
+   Must match custody/chain.py byte for byte. A cross-language test in the repo
+   diffs the two against every shipped record, because if they ever drift this
+   page reports tampering on an honest ledger — which would discredit the only
+   thing it is here to demonstrate. */
+function canon(v){
+  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return "[" + v.map(canon).join(",") + "]";
+  return "{" + Object.keys(v).sort().map(function(k){
+    return JSON.stringify(k) + ":" + canon(v[k]);
+  }).join(",") + "}";
+}
+function canonicalBody(rec){
+  var body = {};
+  Object.keys(rec).forEach(function(k){ if (!CHAIN_FIELDS[k]) body[k] = rec[k]; });
+  return canon(body).replace(NON_ASCII, function(c){
+    return "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0");
+  });
+}
+function hex(buf){
+  return Array.prototype.map.call(new Uint8Array(buf), function(b){
+    return b.toString(16).padStart(2, "0");
+  }).join("");
+}
+async function sha256(str){
+  return hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str)));
+}
+
+/* ---- verification ---------------------------------------------------------
+   Walks from genesis and stops at the first break. Naming which record broke is
+   the point: "verification failed" tells an examiner nothing about where to
+   look, and everything after the break is unreliable rather than separately
+   suspect. */
+async function verifyChain(records){
+  var prev = GENESIS;
+  for (var i = 0; i < records.length; i++){
+    var r = records[i];
+    if (r.prev_hash !== prev){
+      return {ok:false, index:i, id:r.record_id,
+              reason:"its prev_hash does not match the record before it — something was altered, removed or inserted"};
+    }
+    var expected = await sha256(prev + canonicalBody(r));
+    if (expected !== r.hash){
+      return {ok:false, index:i, id:r.record_id,
+              reason:"its contents no longer hash to the value stored with it — this record was edited"};
+    }
+    prev = r.hash;
+  }
+  return {ok:true, count:records.length};
+}
+
+/* ---- state ---- */
+var records = BUNDLE.records.map(function(r){ return JSON.parse(JSON.stringify(r)); });
+var pristine = JSON.stringify(BUNDLE.records);
+var selected = 0;
+var brokenAt = null;
+
+var $ = function(id){ return document.getElementById(id); };
+
+function verdictBadge(r){
+  if (r.event === "human_review") return ["b-human", "human"];
+  var t = r.response_treatment;
+  if (t === "pass")   return ["b-pass", "pass"];
+  if (t === "reject") return ["b-reject", "reject"];
+  return ["b-review", "review"];
+}
+
+function title(r){
+  if (r.event === "human_review"){
+    return (r.action === "corrected" ? "Human correction" : "Human approval");
+  }
+  return r.purpose.replace(/_/g, " ").replace(/^./, function(c){ return c.toUpperCase(); });
+}
+
+function renderChain(){
+  var host = $("chain");
+  host.innerHTML = "";
+  records.forEach(function(r, i){
+    var b = document.createElement("button");
+    b.className = "rec" + (brokenAt !== null && i >= brokenAt ? " broken" : "");
+    b.setAttribute("role", "option");
+    b.setAttribute("aria-selected", i === selected ? "true" : "false");
+    var badge = verdictBadge(r);
+    b.innerHTML =
+      '<span class="n">' + i + '</span>' +
+      '<span class="what"><b></b><span></span></span>' +
+      '<span class="badge ' + badge[0] + '">' + badge[1] + '</span>' +
+      '<span class="hash">' + r.hash.slice(0, 16) + '…</span>';
+    b.querySelector(".what b").textContent = title(r);
+    b.querySelector(".what span").textContent =
+      (r.model || "human") + " · " + r.principal.split("@")[0] +
+      " · " + (r.disposition || "").replace(/_/g, " ");
+    b.addEventListener("click", function(){ selected = i; render(); });
+    host.appendChild(b);
+  });
+}
+
+function renderDetail(){
+  var r = records[selected];
+  if (!r){ $("detail").hidden = true; return; }
+  $("detail").hidden = false;
+  $("dTitle").textContent = title(r);
+  $("dId").textContent = r.record_id;
+
+  var dl = $("dFields");
+  dl.innerHTML = "";
+  MANDATE.forEach(function(f){
+    var dt = document.createElement("dt");
+    dt.className = "req";
+    dt.textContent = f;
+    var dd = document.createElement("dd");
+    var v = r[f];
+    if (v === null || v === undefined || v === ""){
+      dd.className = "null";
+      dd.textContent = f === "decision_outcome"
+        ? "null — nothing was written downstream"
+        : "null";
+    } else {
+      dd.textContent = typeof v === "object" ? JSON.stringify(v) : String(v);
+    }
+    dl.appendChild(dt); dl.appendChild(dd);
+  });
+  [["hash","hash"],["prev_hash","prev_hash"]].forEach(function(pair){
+    var dt = document.createElement("dt"); dt.textContent = pair[0];
+    var dd = document.createElement("dd"); dd.textContent = r[pair[1]];
+    dl.appendChild(dt); dl.appendChild(dd);
+  });
+
+  var box = $("dFindings");
+  if (r.findings && r.findings.length){
+    box.hidden = false;
+    box.className = "findings" + (r.response_treatment === "review" ? " review" : "");
+    box.innerHTML = r.findings.map(function(f){
+      return "<p><code>" + f.check + "</code> &mdash; " + f.detail + "</p>";
+    }).join("");
+  } else if (r.note){
+    box.hidden = false;
+    box.className = "findings review";
+    box.innerHTML = "<p>" + r.note + "</p>";
+  } else {
+    box.hidden = true;
+  }
+}
+
+function renderPacket(){
+  var p = BUNDLE.packets[LOAN];
+  var s = p.summary;
+  var cells = [
+    [s.ai_decisions, "AI decisions on this loan", ""],
+    [s.human_reviews, "recorded human reviews", "ok"],
+    [s.rejected, "outputs the gate refused", "warn"],
+    [s.routed_to_human, "routed to a person", "warn"],
+    [p.mandate_coverage.complete ? "8 / 8" : "gaps", "mandate fields present on every record",
+      p.mandate_coverage.complete ? "ok" : "warn"]
+  ];
+  $("packet").innerHTML = cells.map(function(c){
+    return '<div class="cell ' + c[2] + '"><span class="k">' + c[0] +
+           '</span><span class="v">' + c[1] + '</span></div>';
+  }).join("");
+  $("packetNote").innerHTML =
+    "Loan <b>" + p.loan + "</b> under policy <b>" + p.policy_version + "</b>. " +
+    "The rejected income extraction is in this packet, not filtered out of it — " +
+    "an audit trail that shows only the successes is a brochure.";
+}
+
+function render(){ renderChain(); renderDetail(); }
+
+/* ---- controls ---- */
+async function runVerify(){
+  var el = $("status");
+  el.className = "status";
+  $("statusMain").textContent = "Verifying…";
+  $("statusSub").textContent = "recomputing SHA-256 over each record";
+
+  var result = await verifyChain(records);
+  if (result.ok){
+    brokenAt = null;
+    el.className = "status ok";
+    $("statusMain").textContent = "Chain verified — " + result.count + " records";
+    $("statusSub").textContent =
+      "every hash recomputed in your browser from the record contents";
+  } else {
+    brokenAt = result.index;
+    el.className = "status bad";
+    $("statusMain").textContent = "Chain broken at record " + result.index;
+    $("statusSub").textContent = result.id + " — " + result.reason;
+  }
+  render();
+}
+
+$("btnVerify").addEventListener("click", runVerify);
+
+$("btnTamper").addEventListener("click", function(){
+  /* The most consequential edit somebody could make: quietly turning the
+     rejection of a fabricated income figure into a pass, so the file looks like
+     the AI was right all along. */
+  records[1].response_treatment = "pass";
+  records[1].disposition = "committed";
+  records[1].findings = [];
+  selected = 1;
+  $("btnRestore").disabled = false;
+  $("tamperNote").hidden = false;
+  $("tamperNote").innerHTML =
+    "<strong>Record 1 has been edited</strong> — its rejection is now recorded as a " +
+    "pass, and the finding that named the invented figure is gone. The record reads " +
+    "as though the model was right. Press <b>Verify chain</b>.";
+  $("status").className = "status";
+  $("statusMain").textContent = "Not yet verified";
+  $("statusSub").textContent = "a record was changed since the last check";
+  render();
+});
+
+$("btnRestore").addEventListener("click", function(){
+  records = JSON.parse(pristine);
+  brokenAt = null;
+  selected = 1;
+  $("btnRestore").disabled = true;
+  $("tamperNote").hidden = true;
+  render();
+  runVerify();
+});
+
+/* ---- init ---- */
+renderPacket();
+render();
+$("footMeta").textContent =
+  "policy " + BUNDLE.policy_version + " · signing key " +
+  BUNDLE.public_key.slice(0, 16) + "… · ledger generated " + BUNDLE.generated_at;
+runVerify();
+})();
+</script>
