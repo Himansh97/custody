@@ -27,7 +27,8 @@ def _bundle(ledger: Ledger) -> dict:
     return {
         "generated_at": "live",
         "policy_version": ledger.policy,
-        "public_key": ledger.public_key.public_bytes_raw().hex(),
+        "public_key": ledger.public_key_hex,
+        "sig_alg": ledger.algorithm,
         "chain": chain_status(records, ledger.public_key),
         "records": records,
         "packets": {loan: packet(ledger, loan) for loan in loans},
@@ -92,13 +93,14 @@ def _handler(ledger: Ledger):
 
 
 def serve(*, db: str, key_path: str | None, host: str = "127.0.0.1", port: int = 8787) -> None:
-    from .cli import load_key
+    from .cli import load_signer
 
-    ledger = Ledger(policy="-", signing_key=load_key(key_path), path=db)
+    signer = load_signer(key_path)
+    ledger = Ledger(policy="-", signer=signer, path=db)
     records = ledger.records()
     status = chain_status(records, ledger.public_key)
 
-    print(f"custody  {db}  {len(records)} records")
+    print(f"custody  {db}  {len(records)} records  signed with {signer.algorithm}")
     print(f"         chain: {'verified' if status['verified'] else status}")
     if host not in ("127.0.0.1", "localhost", "::1"):
         print(f"         WARNING: bound to {host} with no authentication — this exposes")

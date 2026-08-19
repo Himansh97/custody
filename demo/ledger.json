@@ -1,14 +1,15 @@
 {
- "generated_at": "2026-08-19T16:58:53+00:00",
+ "generated_at": "2026-08-19T18:11:16+00:00",
  "policy_version": "northgate-uw-policy-v3.2",
  "public_key": "6e3021a12cb64d260e4fdd5bd724277dbcea5d2fa653efe87ab75f45db397317",
+ "sig_alg": "ed25519",
  "chain": {
   "verified": true,
   "records": 6
  },
  "records": [
   {
-   "completed_at": "2026-08-19T16:58:53.612+00:00",
+   "completed_at": "2026-08-19T18:11:16.855+00:00",
    "decision_outcome": {
     "doc_type": "paystub"
    },
@@ -16,7 +17,7 @@
    "endpoint": "anthropic:messages:claude-haiku-4-5",
    "event": "ai_decision",
    "findings": [],
-   "hash": "327d744f45d42a52fb61c02f16c2c805afd23b1a78a80010f22758c66b30be06",
+   "hash": "588858f3f91fd7084a47cd38df81f152a7428663f4666b03f6ace9404b0ebadb",
    "loan": "1000254",
    "model": "claude-haiku-4-5",
    "note": null,
@@ -25,14 +26,15 @@
    "principal": "jane.mireles@northgate-lending.example",
    "prompt_redacted": "Classify each document in this bundle.\n\nACME LOGISTICS LLC                       EARNINGS STATEMENT\n1400 Corporate Drive, Irving TX 75038\n------------------------------------------------------------------\nEmployee: [BORROWER]            Emp...",
    "purpose": "document_classification",
-   "record_id": "dec_9ab463521c8c4314",
+   "record_id": "dec_56b7dd6194f94d60",
    "response_treatment": "pass",
-   "signature": "23c67b1aca35cc06119cbc80d196a739b98e3600b3c21571c848088ecb4ac93adccb6b652ec8a933c47f330a0acf79894cc0ab3c0155c0ae374977c6c1e5560e",
+   "sig_alg": "ed25519",
+   "signature": "7cf9c9417a82e6234bd9ad876afa7c8991c34e651d70a8030327b37f91bd4d222ab4c129dad97969c1af8154e2385be6596c135d133ace9a003d813abfbf0400",
    "sources_seen": 3,
-   "timestamp": "2026-08-19T16:58:53.611+00:00"
+   "timestamp": "2026-08-19T18:11:16.854+00:00"
   },
   {
-   "completed_at": "2026-08-19T16:58:53.614+00:00",
+   "completed_at": "2026-08-19T18:11:16.856+00:00",
    "decision_outcome": null,
    "disposition": "routed_to_human",
    "endpoint": "anthropic:messages:claude-sonnet-5",
@@ -44,20 +46,21 @@
      "treatment": "reject"
     }
    ],
-   "hash": "19f9b53add4db9284e838754f71db7f6c3f1bcb3a39061a9fe9a9cef0fbead2f",
+   "hash": "efc79478254a3f05c3c8725671775ba73b7c6928b6c6c2b483502d21ae9cefeb",
    "loan": "1000254",
    "model": "claude-sonnet-5",
    "note": "figure binding rejected the extracted income",
    "policy_version": "northgate-uw-policy-v3.2",
-   "prev_hash": "327d744f45d42a52fb61c02f16c2c805afd23b1a78a80010f22758c66b30be06",
+   "prev_hash": "588858f3f91fd7084a47cd38df81f152a7428663f4666b03f6ace9404b0ebadb",
    "principal": "jane.mireles@northgate-lending.example",
    "prompt_redacted": "Borrower [BORROWER], loan 1000254. Compute qualifying monthly income from the attached paystub and W-2.\n\nACME LOGISTICS LLC                       EARNINGS STATEMENT\n1400 Corporate Drive, Irving TX 75038\n------------------------------------------------------------------\nEmployee: [BORROWER]            Employee ID: E-40881\nPay period: [DOB] - [DOB]      Pay date: [DOB]\n------------------------------------------------------------------\n                       CURRENT        YEAR TO DATE\nRegular              3,846.15            50,000.00\nOvertime               359.85             4,672.00\nGross pay            4,206.00            54,672.00\n------------------------------------------------------------------\nFederal income tax     694.00             9,022.00\nSocial Security        260.77             3,389.66\nMedicare                60.99               792.74\n------------------------------------------------------------------\nNet pay              3,190.24            41,467.60\n\n\nFORM W-2 WAGE AND TAX STATEMENT \u2014 TAX YEAR 2025\nEmployer: ACME LOGISTICS LLC        EIN: 75-3310042\n------------------------------------------------------------------\nBox  1  Wages, tips, other compensation          98,410.00\nBox  2  Federal income tax withheld              16,229.00\nBox  3  Social Security wages                    98,410.00\nBox  5  Medicare wages and tips                  98,410.00\nBox 12  D  401(k) elective deferrals              7,200.00\n",
    "purpose": "income_calculation",
-   "record_id": "dec_95f4d28890e54e23",
+   "record_id": "dec_f62065df714e4088",
    "response_treatment": "reject",
-   "signature": "4e407614bcd3e56c2fc5e9730b28ee07586f7015cff880998c2768d6dd5dfcd71113636245b273da85765ce1efac6a16903852b5ef48568e336b2e20ac6b6a0f",
+   "sig_alg": "ed25519",
+   "signature": "c418781ba478d54d30141d43c98130b6bb9e74cfa0f58ce6e9ee077c186e40cc95fc845e5bf7bdb61bf713c9870ba1be57b33a9eac73f3dd407e183288715e02",
    "sources_seen": 2,
-   "timestamp": "2026-08-19T16:58:53.614+00:00"
+   "timestamp": "2026-08-19T18:11:16.855+00:00"
   },
   {
    "action": "corrected",
@@ -69,23 +72,24 @@
    "endpoint": null,
    "event": "human_review",
    "findings": [],
-   "hash": "1240039f294f29fa8b9e1fc7caf0e2565e59b13dc1254ecbf735d44d0a6c3460",
+   "hash": "92cd4ddc60f491b7bf7f4432fd8f31fafb6c187df4e57503d4e3bfff1be3cfba",
    "loan": "1000254",
    "model": null,
    "note": "Model figure appears in no document. Recomputed from the W-2 and verified against the paystub YTD.",
    "policy_version": "northgate-uw-policy-v3.2",
-   "prev_hash": "19f9b53add4db9284e838754f71db7f6c3f1bcb3a39061a9fe9a9cef0fbead2f",
+   "prev_hash": "efc79478254a3f05c3c8725671775ba73b7c6928b6c6c2b483502d21ae9cefeb",
    "principal": "sam.okafor@northgate-lending.example",
    "prompt_redacted": null,
    "purpose": "human_review",
-   "record_id": "hum_92dcb494eebe48f1",
+   "record_id": "hum_0c9fe95d50d04dcb",
    "response_treatment": "human_decision",
-   "reviews": "dec_95f4d28890e54e23",
-   "signature": "1c1fba8adb294df1262821a67a6ee4b0b70f696ff98c12bfff9ad1044767d96c3a497c8418283008a21e31dc50bcc061e7aa059d15cfcd5e4051a32ad0e1c307",
-   "timestamp": "2026-08-19T16:58:53.615+00:00"
+   "reviews": "dec_f62065df714e4088",
+   "sig_alg": "ed25519",
+   "signature": "2eb77a961bef14038bc56c4c041b90a8e6a0b41978fab9fdf0628ba86eec5f89db767769175861121783d56272f20d916e04b7cc355c923fa1cd0ac46a63eb04",
+   "timestamp": "2026-08-19T18:11:16.856+00:00"
   },
   {
-   "completed_at": "2026-08-19T16:58:53.615+00:00",
+   "completed_at": "2026-08-19T18:11:16.856+00:00",
    "decision_outcome": null,
    "disposition": "routed_to_human",
    "endpoint": "anthropic:messages:claude-sonnet-5",
@@ -97,20 +101,21 @@
      "treatment": "review"
     }
    ],
-   "hash": "2f478daa8fa5d63b772fd6c0a51ba3f689bcb4ac663cd2356cc93eda53b5be44",
+   "hash": "f001921ccb18cdc1434ca300fb850370c5a3d88f8910fe237fef51ada72735b5",
    "loan": "1000254",
    "model": "claude-sonnet-5",
    "note": "confidence below the policy floor",
    "policy_version": "northgate-uw-policy-v3.2",
-   "prev_hash": "1240039f294f29fa8b9e1fc7caf0e2565e59b13dc1254ecbf735d44d0a6c3460",
+   "prev_hash": "92cd4ddc60f491b7bf7f4432fd8f31fafb6c187df4e57503d4e3bfff1be3cfba",
    "principal": "jane.mireles@northgate-lending.example",
    "prompt_redacted": "Does the bank statement evidence the payroll deposits?\n\nNORTHWIND CREDIT UNION \u2014 STATEMENT OF ACCOUNT\nStatement period: [DOB] - [DOB]\nAccount ending: 4471\n------------------------------------------------------------------\nBeginning balance                                18,204.11\nTotal deposits                                    6,380.48\nTotal withdrawals                                 4,912.30\nEnding balance                                   19,672.29\n------------------------------------------------------------------\n06/15  DIRECT DEP  ACME LOGISTICS PAYROLL         3,190.24\n06/30  DIRECT DEP  ACME LOGISTICS PAYROLL         3,190.24\n",
    "purpose": "condition_clearing",
-   "record_id": "dec_ecf32d269dd84e7b",
+   "record_id": "dec_31eed598c4a84b11",
    "response_treatment": "review",
-   "signature": "a107603306043c8e816d2f3826b3c9fc10d50519650a6125ab9b9fb14f52d6e95bf3dbe28656f0781d4a5b5ef0beb8a564b23767fadda6c988271cdb952aa301",
+   "sig_alg": "ed25519",
+   "signature": "4f4c0464e1011727b7c6bfeea6e742fc63289b67c622314c3039c6b00d02ab4d204afbd747755f478ed4453f6938ecacaaf2d5f161e9772c90d094a37bf81d0b",
    "sources_seen": 2,
-   "timestamp": "2026-08-19T16:58:53.615+00:00"
+   "timestamp": "2026-08-19T18:11:16.856+00:00"
   },
   {
    "action": "approved",
@@ -121,23 +126,24 @@
    "endpoint": null,
    "event": "human_review",
    "findings": [],
-   "hash": "b87e55665a6cfdfcca11b9dbb7fafbdf7e6f1c9fd1ac05d3739762f0cb918499",
+   "hash": "0eb319d21793fa0e1181afd443eef106734edd116dca6d7781b33c35a6a1dc90",
    "loan": "1000254",
    "model": null,
    "note": "Two payroll deposits of 3,190.24 visible on the June statement.",
    "policy_version": "northgate-uw-policy-v3.2",
-   "prev_hash": "2f478daa8fa5d63b772fd6c0a51ba3f689bcb4ac663cd2356cc93eda53b5be44",
+   "prev_hash": "f001921ccb18cdc1434ca300fb850370c5a3d88f8910fe237fef51ada72735b5",
    "principal": "jane.mireles@northgate-lending.example",
    "prompt_redacted": null,
    "purpose": "human_review",
-   "record_id": "hum_c52e7a0f3b6f4c91",
+   "record_id": "hum_23e423585d3148ac",
    "response_treatment": "human_decision",
-   "reviews": "dec_ecf32d269dd84e7b",
-   "signature": "5baadcb6d2f70d7ea652e41afe996f1d4cbf2e968456a6531b38538542bf48fbc003adc06f3a59908eebb3aa5b51abb0bb4b82b07a5b54a7e6cc47888ab0b602",
-   "timestamp": "2026-08-19T16:58:53.615+00:00"
+   "reviews": "dec_31eed598c4a84b11",
+   "sig_alg": "ed25519",
+   "signature": "b583ae84574802a8f34c7f8253ff57875e9a2c93298359c57ae8a4ed4c3fe132e5a57c8995eaac0fbfbea76da1482dc7cf05bb2a14844d8202a8a8751fa12303",
+   "timestamp": "2026-08-19T18:11:16.857+00:00"
   },
   {
-   "completed_at": "2026-08-19T16:58:53.616+00:00",
+   "completed_at": "2026-08-19T18:11:16.857+00:00",
    "decision_outcome": {
     "annual_income": 98410.0,
     "qualifying_monthly_income": 8200.83
@@ -146,26 +152,27 @@
    "endpoint": "anthropic:messages:claude-sonnet-5",
    "event": "ai_decision",
    "findings": [],
-   "hash": "24c6fc0cee47d156929b971e890961fc19c0c6b0138343369a1bba60e3860f58",
+   "hash": "0cf2c799d2d5a25dc29857eac3724cb3f11e36d3b50764038b33f34dda870cd9",
    "loan": "1000254",
    "model": "claude-sonnet-5",
    "note": null,
    "policy_version": "northgate-uw-policy-v3.2",
-   "prev_hash": "b87e55665a6cfdfcca11b9dbb7fafbdf7e6f1c9fd1ac05d3739762f0cb918499",
+   "prev_hash": "0eb319d21793fa0e1181afd443eef106734edd116dca6d7781b33c35a6a1dc90",
    "principal": "jane.mireles@northgate-lending.example",
    "prompt_redacted": "Assemble the verified income figures for the LOS write.",
    "purpose": "los_write",
-   "record_id": "dec_067d929ebd9d420c",
+   "record_id": "dec_05c41fce5d5f4edf",
    "response_treatment": "pass",
-   "signature": "9147a89bb02634962622ff6ac5a4fcb7368cac964068ab1656ee1f9746a884d7812c281dabba2a572d7f01f701186d476dbab6e7a8c2c2fcc4571cb29821940f",
+   "sig_alg": "ed25519",
+   "signature": "58facb2a56b70ebbe9164000340da964be9f96e175bb735085a68822c197c58c9403354739ede55558e52282f15111ae96b519d7723df2fafe46a1eaa7bb6003",
    "sources_seen": 3,
-   "timestamp": "2026-08-19T16:58:53.615+00:00"
+   "timestamp": "2026-08-19T18:11:16.857+00:00"
   }
  ],
  "packets": {
   "1000254": {
    "loan": "1000254",
-   "generated_at": "2026-08-19T16:58:53+00:00",
+   "generated_at": "2026-08-19T18:11:16+00:00",
    "requested_by": "examiner",
    "policy_version": "northgate-uw-policy-v3.2",
    "summary": {
@@ -189,7 +196,7 @@
    },
    "records": [
     {
-     "completed_at": "2026-08-19T16:58:53.612+00:00",
+     "completed_at": "2026-08-19T18:11:16.855+00:00",
      "decision_outcome": {
       "doc_type": "paystub"
      },
@@ -197,7 +204,7 @@
      "endpoint": "anthropic:messages:claude-haiku-4-5",
      "event": "ai_decision",
      "findings": [],
-     "hash": "327d744f45d42a52fb61c02f16c2c805afd23b1a78a80010f22758c66b30be06",
+     "hash": "588858f3f91fd7084a47cd38df81f152a7428663f4666b03f6ace9404b0ebadb",
      "loan": "1000254",
      "model": "claude-haiku-4-5",
      "note": null,
@@ -206,14 +213,15 @@
      "principal": "jane.mireles@northgate-lending.example",
      "prompt_redacted": "Classify each document in this bundle.\n\nACME LOGISTICS LLC                       EARNINGS STATEMENT\n1400 Corporate Drive, Irving TX 75038\n------------------------------------------------------------------\nEmployee: [BORROWER]            Emp...",
      "purpose": "document_classification",
-     "record_id": "dec_9ab463521c8c4314",
+     "record_id": "dec_56b7dd6194f94d60",
      "response_treatment": "pass",
-     "signature": "23c67b1aca35cc06119cbc80d196a739b98e3600b3c21571c848088ecb4ac93adccb6b652ec8a933c47f330a0acf79894cc0ab3c0155c0ae374977c6c1e5560e",
+     "sig_alg": "ed25519",
+     "signature": "7cf9c9417a82e6234bd9ad876afa7c8991c34e651d70a8030327b37f91bd4d222ab4c129dad97969c1af8154e2385be6596c135d133ace9a003d813abfbf0400",
      "sources_seen": 3,
-     "timestamp": "2026-08-19T16:58:53.611+00:00"
+     "timestamp": "2026-08-19T18:11:16.854+00:00"
     },
     {
-     "completed_at": "2026-08-19T16:58:53.614+00:00",
+     "completed_at": "2026-08-19T18:11:16.856+00:00",
      "decision_outcome": null,
      "disposition": "routed_to_human",
      "endpoint": "anthropic:messages:claude-sonnet-5",
@@ -225,20 +233,21 @@
        "treatment": "reject"
       }
      ],
-     "hash": "19f9b53add4db9284e838754f71db7f6c3f1bcb3a39061a9fe9a9cef0fbead2f",
+     "hash": "efc79478254a3f05c3c8725671775ba73b7c6928b6c6c2b483502d21ae9cefeb",
      "loan": "1000254",
      "model": "claude-sonnet-5",
      "note": "figure binding rejected the extracted income",
      "policy_version": "northgate-uw-policy-v3.2",
-     "prev_hash": "327d744f45d42a52fb61c02f16c2c805afd23b1a78a80010f22758c66b30be06",
+     "prev_hash": "588858f3f91fd7084a47cd38df81f152a7428663f4666b03f6ace9404b0ebadb",
      "principal": "jane.mireles@northgate-lending.example",
      "prompt_redacted": "Borrower [BORROWER], loan 1000254. Compute qualifying monthly income from the attached paystub and W-2.\n\nACME LOGISTICS LLC                       EARNINGS STATEMENT\n1400 Corporate Drive, Irving TX 75038\n------------------------------------------------------------------\nEmployee: [BORROWER]            Employee ID: E-40881\nPay period: [DOB] - [DOB]      Pay date: [DOB]\n------------------------------------------------------------------\n                       CURRENT        YEAR TO DATE\nRegular              3,846.15            50,000.00\nOvertime               359.85             4,672.00\nGross pay            4,206.00            54,672.00\n------------------------------------------------------------------\nFederal income tax     694.00             9,022.00\nSocial Security        260.77             3,389.66\nMedicare                60.99               792.74\n------------------------------------------------------------------\nNet pay              3,190.24            41,467.60\n\n\nFORM W-2 WAGE AND TAX STATEMENT \u2014 TAX YEAR 2025\nEmployer: ACME LOGISTICS LLC        EIN: 75-3310042\n------------------------------------------------------------------\nBox  1  Wages, tips, other compensation          98,410.00\nBox  2  Federal income tax withheld              16,229.00\nBox  3  Social Security wages                    98,410.00\nBox  5  Medicare wages and tips                  98,410.00\nBox 12  D  401(k) elective deferrals              7,200.00\n",
      "purpose": "income_calculation",
-     "record_id": "dec_95f4d28890e54e23",
+     "record_id": "dec_f62065df714e4088",
      "response_treatment": "reject",
-     "signature": "4e407614bcd3e56c2fc5e9730b28ee07586f7015cff880998c2768d6dd5dfcd71113636245b273da85765ce1efac6a16903852b5ef48568e336b2e20ac6b6a0f",
+     "sig_alg": "ed25519",
+     "signature": "c418781ba478d54d30141d43c98130b6bb9e74cfa0f58ce6e9ee077c186e40cc95fc845e5bf7bdb61bf713c9870ba1be57b33a9eac73f3dd407e183288715e02",
      "sources_seen": 2,
-     "timestamp": "2026-08-19T16:58:53.614+00:00"
+     "timestamp": "2026-08-19T18:11:16.855+00:00"
     },
     {
      "action": "corrected",
@@ -250,23 +259,24 @@
      "endpoint": null,
      "event": "human_review",
      "findings": [],
-     "hash": "1240039f294f29fa8b9e1fc7caf0e2565e59b13dc1254ecbf735d44d0a6c3460",
+     "hash": "92cd4ddc60f491b7bf7f4432fd8f31fafb6c187df4e57503d4e3bfff1be3cfba",
      "loan": "1000254",
      "model": null,
      "note": "Model figure appears in no document. Recomputed from the W-2 and verified against the paystub YTD.",
      "policy_version": "northgate-uw-policy-v3.2",
-     "prev_hash": "19f9b53add4db9284e838754f71db7f6c3f1bcb3a39061a9fe9a9cef0fbead2f",
+     "prev_hash": "efc79478254a3f05c3c8725671775ba73b7c6928b6c6c2b483502d21ae9cefeb",
      "principal": "sam.okafor@northgate-lending.example",
      "prompt_redacted": null,
      "purpose": "human_review",
-     "record_id": "hum_92dcb494eebe48f1",
+     "record_id": "hum_0c9fe95d50d04dcb",
      "response_treatment": "human_decision",
-     "reviews": "dec_95f4d28890e54e23",
-     "signature": "1c1fba8adb294df1262821a67a6ee4b0b70f696ff98c12bfff9ad1044767d96c3a497c8418283008a21e31dc50bcc061e7aa059d15cfcd5e4051a32ad0e1c307",
-     "timestamp": "2026-08-19T16:58:53.615+00:00"
+     "reviews": "dec_f62065df714e4088",
+     "sig_alg": "ed25519",
+     "signature": "2eb77a961bef14038bc56c4c041b90a8e6a0b41978fab9fdf0628ba86eec5f89db767769175861121783d56272f20d916e04b7cc355c923fa1cd0ac46a63eb04",
+     "timestamp": "2026-08-19T18:11:16.856+00:00"
     },
     {
-     "completed_at": "2026-08-19T16:58:53.615+00:00",
+     "completed_at": "2026-08-19T18:11:16.856+00:00",
      "decision_outcome": null,
      "disposition": "routed_to_human",
      "endpoint": "anthropic:messages:claude-sonnet-5",
@@ -278,20 +288,21 @@
        "treatment": "review"
       }
      ],
-     "hash": "2f478daa8fa5d63b772fd6c0a51ba3f689bcb4ac663cd2356cc93eda53b5be44",
+     "hash": "f001921ccb18cdc1434ca300fb850370c5a3d88f8910fe237fef51ada72735b5",
      "loan": "1000254",
      "model": "claude-sonnet-5",
      "note": "confidence below the policy floor",
      "policy_version": "northgate-uw-policy-v3.2",
-     "prev_hash": "1240039f294f29fa8b9e1fc7caf0e2565e59b13dc1254ecbf735d44d0a6c3460",
+     "prev_hash": "92cd4ddc60f491b7bf7f4432fd8f31fafb6c187df4e57503d4e3bfff1be3cfba",
      "principal": "jane.mireles@northgate-lending.example",
      "prompt_redacted": "Does the bank statement evidence the payroll deposits?\n\nNORTHWIND CREDIT UNION \u2014 STATEMENT OF ACCOUNT\nStatement period: [DOB] - [DOB]\nAccount ending: 4471\n------------------------------------------------------------------\nBeginning balance                                18,204.11\nTotal deposits                                    6,380.48\nTotal withdrawals                                 4,912.30\nEnding balance                                   19,672.29\n------------------------------------------------------------------\n06/15  DIRECT DEP  ACME LOGISTICS PAYROLL         3,190.24\n06/30  DIRECT DEP  ACME LOGISTICS PAYROLL         3,190.24\n",
      "purpose": "condition_clearing",
-     "record_id": "dec_ecf32d269dd84e7b",
+     "record_id": "dec_31eed598c4a84b11",
      "response_treatment": "review",
-     "signature": "a107603306043c8e816d2f3826b3c9fc10d50519650a6125ab9b9fb14f52d6e95bf3dbe28656f0781d4a5b5ef0beb8a564b23767fadda6c988271cdb952aa301",
+     "sig_alg": "ed25519",
+     "signature": "4f4c0464e1011727b7c6bfeea6e742fc63289b67c622314c3039c6b00d02ab4d204afbd747755f478ed4453f6938ecacaaf2d5f161e9772c90d094a37bf81d0b",
      "sources_seen": 2,
-     "timestamp": "2026-08-19T16:58:53.615+00:00"
+     "timestamp": "2026-08-19T18:11:16.856+00:00"
     },
     {
      "action": "approved",
@@ -302,23 +313,24 @@
      "endpoint": null,
      "event": "human_review",
      "findings": [],
-     "hash": "b87e55665a6cfdfcca11b9dbb7fafbdf7e6f1c9fd1ac05d3739762f0cb918499",
+     "hash": "0eb319d21793fa0e1181afd443eef106734edd116dca6d7781b33c35a6a1dc90",
      "loan": "1000254",
      "model": null,
      "note": "Two payroll deposits of 3,190.24 visible on the June statement.",
      "policy_version": "northgate-uw-policy-v3.2",
-     "prev_hash": "2f478daa8fa5d63b772fd6c0a51ba3f689bcb4ac663cd2356cc93eda53b5be44",
+     "prev_hash": "f001921ccb18cdc1434ca300fb850370c5a3d88f8910fe237fef51ada72735b5",
      "principal": "jane.mireles@northgate-lending.example",
      "prompt_redacted": null,
      "purpose": "human_review",
-     "record_id": "hum_c52e7a0f3b6f4c91",
+     "record_id": "hum_23e423585d3148ac",
      "response_treatment": "human_decision",
-     "reviews": "dec_ecf32d269dd84e7b",
-     "signature": "5baadcb6d2f70d7ea652e41afe996f1d4cbf2e968456a6531b38538542bf48fbc003adc06f3a59908eebb3aa5b51abb0bb4b82b07a5b54a7e6cc47888ab0b602",
-     "timestamp": "2026-08-19T16:58:53.615+00:00"
+     "reviews": "dec_31eed598c4a84b11",
+     "sig_alg": "ed25519",
+     "signature": "b583ae84574802a8f34c7f8253ff57875e9a2c93298359c57ae8a4ed4c3fe132e5a57c8995eaac0fbfbea76da1482dc7cf05bb2a14844d8202a8a8751fa12303",
+     "timestamp": "2026-08-19T18:11:16.857+00:00"
     },
     {
-     "completed_at": "2026-08-19T16:58:53.616+00:00",
+     "completed_at": "2026-08-19T18:11:16.857+00:00",
      "decision_outcome": {
       "annual_income": 98410.0,
       "qualifying_monthly_income": 8200.83
@@ -327,23 +339,25 @@
      "endpoint": "anthropic:messages:claude-sonnet-5",
      "event": "ai_decision",
      "findings": [],
-     "hash": "24c6fc0cee47d156929b971e890961fc19c0c6b0138343369a1bba60e3860f58",
+     "hash": "0cf2c799d2d5a25dc29857eac3724cb3f11e36d3b50764038b33f34dda870cd9",
      "loan": "1000254",
      "model": "claude-sonnet-5",
      "note": null,
      "policy_version": "northgate-uw-policy-v3.2",
-     "prev_hash": "b87e55665a6cfdfcca11b9dbb7fafbdf7e6f1c9fd1ac05d3739762f0cb918499",
+     "prev_hash": "0eb319d21793fa0e1181afd443eef106734edd116dca6d7781b33c35a6a1dc90",
      "principal": "jane.mireles@northgate-lending.example",
      "prompt_redacted": "Assemble the verified income figures for the LOS write.",
      "purpose": "los_write",
-     "record_id": "dec_067d929ebd9d420c",
+     "record_id": "dec_05c41fce5d5f4edf",
      "response_treatment": "pass",
-     "signature": "9147a89bb02634962622ff6ac5a4fcb7368cac964068ab1656ee1f9746a884d7812c281dabba2a572d7f01f701186d476dbab6e7a8c2c2fcc4571cb29821940f",
+     "sig_alg": "ed25519",
+     "signature": "58facb2a56b70ebbe9164000340da964be9f96e175bb735085a68822c197c58c9403354739ede55558e52282f15111ae96b519d7723df2fafe46a1eaa7bb6003",
      "sources_seen": 3,
-     "timestamp": "2026-08-19T16:58:53.615+00:00"
+     "timestamp": "2026-08-19T18:11:16.857+00:00"
     }
    ],
-   "public_key": "6e3021a12cb64d260e4fdd5bd724277dbcea5d2fa653efe87ab75f45db397317"
+   "public_key": "6e3021a12cb64d260e4fdd5bd724277dbcea5d2fa653efe87ab75f45db397317",
+   "sig_alg": "ed25519"
   }
  }
 }

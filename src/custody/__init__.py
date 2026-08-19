@@ -19,11 +19,13 @@ from .chain import ChainError, verify_chain
 from .examiner import export, packet
 from .ledger import MANDATE_FIELDS, Decision, Ledger
 from .store import Store
+from .signing import ECDSA_P256, ED25519, KeyVaultSigner, LocalSigner, Signer
 from .verify import PASS, REJECT, REVIEW, Verdict, gate
 
 __all__ = [
     "Ledger", "Decision", "Store", "gate", "Verdict",
     "PASS", "REVIEW", "REJECT", "packet", "export",
     "verify_chain", "ChainError", "MANDATE_FIELDS",
+    "Signer", "LocalSigner", "KeyVaultSigner", "ED25519", "ECDSA_P256",
 ]
-__version__ = "0.2.0"
+__version__ = "0.3.0"

@@ -90,7 +90,8 @@ def packet(
         "chain": status,
         "mandate_coverage": coverage(records),
         "records": records,
-        "public_key": ledger.public_key.public_bytes_raw().hex(),
+        "public_key": ledger.public_key_hex,
+        "sig_alg": ledger.algorithm,
     }
 
 
@@ -106,7 +107,8 @@ def export(ledger, path: str, *, loans: list[str] | None = None) -> dict[str, An
     bundle = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "policy_version": ledger.policy,
-        "public_key": ledger.public_key.public_bytes_raw().hex(),
+        "public_key": ledger.public_key_hex,
+        "sig_alg": ledger.algorithm,
         "chain": chain_status(records, ledger.public_key),
         "records": records,
         "packets": {loan: packet(ledger, loan) for loan in loans},

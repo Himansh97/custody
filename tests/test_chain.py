@@ -119,10 +119,24 @@ def test_a_record_signed_by_the_wrong_key_is_rejected() -> None:
 
 
 def test_the_chain_fields_are_not_part_of_their_own_hash() -> None:
-    """Otherwise sealing could never terminate."""
+    """prev_hash, hash and signature cannot be inputs to their own computation.
+
+    Asserted against the canonical bytes directly rather than by comparing a
+    sealed record to its unsealed self, because sealing legitimately adds
+    `sig_alg` to the body — that field is *meant* to be hashed, so that an
+    attacker cannot rewrite the algorithm claim without breaking the chain.
+    """
     record = {"record_id": "r", "seq": 0, "loan": "1"}
     sealed = seal(record, GENESIS, KEY)
-    assert canonical(sealed) == canonical(record)
+
+    body = canonical(sealed).decode()
+    for excluded in ("prev_hash", "hash", "signature"):
+        assert f'"{excluded}"' not in body, f"{excluded} was hashed into itself"
+
+    assert '"sig_alg"' in body, "the algorithm claim is not covered by the hash"
+
+    # Re-hashing the sealed record must reproduce the stored hash exactly.
+    assert compute_hash(sealed, GENESIS) == sealed["hash"]
 
 
 def test_canonical_form_is_stable_under_key_order() -> None:

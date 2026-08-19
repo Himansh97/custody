@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "custody-ledger"
-version = "0.2.0"
+version = "0.3.0"
 description = "A signed chain of evidence for AI decisions in mortgage lending"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -28,7 +28,8 @@ dependencies = ["cryptography>=41"]
 
 [project.optional-dependencies]
 anthropic = ["anthropic>=0.40"]
-dev = ["anthropic>=0.40"]
+azure = ["azure-identity>=1.15", "azure-keyvault-keys>=4.9"]
+dev = ["anthropic>=0.40", "azure-identity>=1.15", "azure-keyvault-keys>=4.9"]
 
 [project.scripts]
 custody = "custody.cli:main"

@@ -18,7 +18,7 @@ import os
 import pathlib
 import sys
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from .signing import ECDSA_P256, ED25519, LocalSigner
 
 DEFAULT_DB = "custody.db"
 DEFAULT_KEY = "custody-signing.key"
@@ -26,24 +26,45 @@ DEFAULT_KEY = "custody-signing.key"
 
 # --------------------------------------------------------------------- keys
 
-def load_key(path: str | None) -> Ed25519PrivateKey:
-    """Read the signing key from a file or `CUSTODY_SIGNING_KEY`.
+def load_signer(path: str | None = None, *, vault: str | None = None,
+                key_name: str | None = None):
+    """Resolve a signer, preferring the one that keeps the key out of this process.
 
-    Refuses to invent one. A ledger signed by a key generated on the fly is
+    Order is deliberate: a vault beats an environment variable beats a file. If
+    someone has gone to the trouble of configuring Key Vault, a stale key file
+    lying around should not silently win.
+
+    Refuses to invent a key. A ledger signed by one generated on the fly is
     signed by nothing in particular — every run would produce a different
     identity, and a signature nobody can tie to a system is decoration.
     """
+    vault = vault or os.environ.get("CUSTODY_KEY_VAULT")
+    key_name = key_name or os.environ.get("CUSTODY_KEY_NAME")
+    if vault and key_name:
+        from .signing import KeyVaultSigner
+        return KeyVaultSigner(vault, key_name)
+
+    algorithm = os.environ.get("CUSTODY_KEY_ALG", ED25519)
     material = os.environ.get("CUSTODY_SIGNING_KEY")
     if material:
-        return Ed25519PrivateKey.from_private_bytes(bytes.fromhex(material.strip()))
+        return LocalSigner.from_hex(material, algorithm)
 
     target = pathlib.Path(path or DEFAULT_KEY)
     if not target.exists():
         raise SystemExit(
-            f"no signing key at {target}. Run `custody keygen` first, "
-            "or set CUSTODY_SIGNING_KEY."
+            f"no signing key at {target}. Run `custody keygen` first, set "
+            "CUSTODY_SIGNING_KEY, or point CUSTODY_KEY_VAULT and CUSTODY_KEY_NAME "
+            "at an Azure Key Vault key."
         )
-    return Ed25519PrivateKey.from_private_bytes(bytes.fromhex(target.read_text().strip()))
+    text = target.read_text().strip().splitlines()
+    if len(text) > 1 and text[0].startswith("alg:"):
+        algorithm = text[0].split(":", 1)[1].strip()
+        return LocalSigner.from_hex(text[1], algorithm)
+    return LocalSigner.from_hex(text[0], algorithm)
+
+
+# Kept so anything written against the earlier name keeps working.
+load_key = load_signer
 
 
 def cmd_keygen(args) -> int:
@@ -53,14 +74,23 @@ def cmd_keygen(args) -> int:
             f"{target} already exists. Overwriting it would orphan every record "
             "signed with the old key — pass --force if that is genuinely what you want."
         )
-    key = Ed25519PrivateKey.generate()
-    target.write_text(key.private_bytes_raw().hex() + "\n", encoding="utf-8")
+    signer = LocalSigner(algorithm=args.algorithm)
+    target.write_text(f"alg:{signer.algorithm}\n{signer.private_hex()}\n", encoding="utf-8")
     target.chmod(0o600)
+    print(f"algorithm    {signer.algorithm}")
     print(f"private key  {target} (mode 600)")
-    print(f"public key   {key.public_key().public_bytes_raw().hex()}")
+    print(f"public key   {signer.public_key_bytes().hex()}")
     print()
-    print("Give the public key to whoever needs to verify your ledgers. In production")
-    print("the private key belongs in a KMS or HSM, not in a file next to the database.")
+    print("Give the public key to whoever verifies your ledgers.")
+    print()
+    print("This key is in a file, which is a development convenience and not how a")
+    print("regulated deployment should run. For production, create an EC P-256 key in")
+    print("Azure Key Vault and point Custody at it -- the private key then never enters")
+    print("this process at all:")
+    print()
+    print("  az keyvault key create --vault-name <vault> --name custody --kty EC --curve P-256")
+    print("  export CUSTODY_KEY_VAULT=https://<vault>.vault.azure.net/")
+    print("  export CUSTODY_KEY_NAME=custody")
     return 0
 
 
@@ -85,7 +115,7 @@ def cmd_run(args) -> int:
     else:
         extract = anthropic_extractor(model=args.model)
 
-    ledger = Ledger(policy=args.policy, signing_key=load_key(args.key), path=args.db)
+    ledger = Ledger(policy=args.policy, signer=load_signer(args.key), path=args.db)
 
     with ledger.decision(loan=args.loan, principal=args.principal, purpose=args.purpose,
                          identifiers=args.redact or ()) as d:
@@ -114,26 +144,34 @@ def cmd_run(args) -> int:
 
 # ------------------------------------------------------------------- verify
 
-def _load_records(source: str) -> tuple[list[dict], str | None]:
-    """Accept either a live database or an exported bundle."""
+def _load_records(source: str) -> tuple[list[dict], str | None, str]:
+    """Accept either a live database or an exported bundle.
+
+    The algorithm comes from the records themselves rather than a flag, because
+    a ledger that cannot say how it was signed is not self-describing and the
+    person verifying it should not have to be told.
+    """
     path = pathlib.Path(source)
     if not path.exists():
         raise SystemExit(f"no such ledger: {path}")
     if path.suffix == ".json":
         bundle = json.loads(path.read_text(encoding="utf-8"))
-        return bundle["records"], bundle.get("public_key")
-    from .store import Store
-    return Store(str(path)).all(), None
+        records = bundle["records"]
+        embedded = bundle.get("public_key")
+    else:
+        from .store import Store
+        records, embedded = Store(str(path)).all(), None
+    algorithm = records[0].get("sig_alg", ED25519) if records else ED25519
+    return records, embedded, algorithm
 
 
 def cmd_verify(args) -> int:
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
     from .chain import ChainError, verify_chain
+    from .signing import load_public_key
 
-    records, embedded = _load_records(args.ledger)
+    records, embedded, algorithm = _load_records(args.ledger)
     pub_hex = args.public_key or embedded
-    public = Ed25519PublicKey.from_public_bytes(bytes.fromhex(pub_hex)) if pub_hex else None
+    public = load_public_key(pub_hex, algorithm) if pub_hex else None
 
     try:
         verify_chain(records, public)
@@ -143,7 +181,8 @@ def cmd_verify(args) -> int:
         print(f"\n{len(records)} records read; everything from {exc.index} onward is unreliable.")
         return 1
 
-    how = "hash chain and signatures" if public else "hash chain only (no public key given)"
+    how = (f"hash chain and {algorithm} signatures" if public
+           else "hash chain only (no public key given)")
     print(f"OK  {len(records)} records verified — {how}")
     return 0
 
@@ -154,7 +193,7 @@ def cmd_packet(args) -> int:
     from .examiner import packet
     from .ledger import Ledger
 
-    ledger = Ledger(policy="-", signing_key=load_key(args.key), path=args.db)
+    ledger = Ledger(policy="-", signer=load_signer(args.key), path=args.db)
     result = packet(ledger, args.loan, requested_by=args.requested_by)
     if not result["records"]:
         raise SystemExit(f"no records for loan {args.loan} in {args.db}")
@@ -209,9 +248,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("keygen", help="generate an Ed25519 signing key")
+    p = sub.add_parser("keygen", help="generate a local signing key")
     p.add_argument("--out", default=DEFAULT_KEY)
     p.add_argument("--force", action="store_true")
+    p.add_argument("--algorithm", default=ED25519, choices=[ED25519, ECDSA_P256],
+                   help="ecdsa-p256-sha256 matches what a KMS can hold")
     p.set_defaults(func=cmd_keygen)
 
     p = sub.add_parser("run", help="run one gated, recorded decision over your documents")

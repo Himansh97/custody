@@ -28,9 +28,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-
 from .chain import seal
+from .signing import ED25519, LocalSigner, public_bytes
 from .redact import redact_value
 from .store import Store
 from .verify import REJECT, REVIEW, Verdict, gate as run_gate
@@ -199,17 +198,42 @@ class Ledger:
         self,
         *,
         policy: str,
-        signing_key: Ed25519PrivateKey,
+        signing_key=None,
+        signer=None,
         store: Store | None = None,
         path: str | Path = ":memory:",
     ):
+        """`signer` is the way in: a LocalSigner, a KeyVaultSigner, or anything
+        with `.algorithm`, `.sign(digest)` and `.public_key_bytes()`.
+
+        `signing_key` still accepts a raw private key and wraps it, so callers
+        written before signers existed keep working.
+        """
+        if signer is None:
+            if signing_key is None:
+                raise ValueError("a Ledger needs either signer= or signing_key=")
+            signer = (
+                signing_key
+                if hasattr(signing_key, "algorithm")
+                else LocalSigner(signing_key, ED25519)
+            )
         self.policy = policy
-        self.key = signing_key
+        self.signer = signer
         self.store = store or Store(path)
 
     @property
+    def algorithm(self) -> str:
+        return self.signer.algorithm
+
+    @property
+    def public_key_hex(self) -> str:
+        return self.signer.public_key_bytes().hex()
+
+    @property
     def public_key(self):
-        return self.key.public_key()
+        """The public key object, for `verify_chain`."""
+        from .signing import load_public_key
+        return load_public_key(self.signer.public_key_bytes(), self.signer.algorithm)
 
     def decision(
         self,
@@ -271,7 +295,7 @@ class Ledger:
         # Atomic read-seal-write. Sealing against a head read in a separate call
         # lets two concurrent writers chain onto the same predecessor and fork
         # the chain.
-        self.store.append_chained(record, lambda r, head: seal(r, head, self.key))
+        self.store.append_chained(record, lambda r, head: seal(r, head, self.signer))
 
     # --------------------------------------------------------------- read side
 

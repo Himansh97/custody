@@ -78,14 +78,56 @@ Verdicts are `pass` / `review` / `reject`. That verdict is the recorded
 
 ## The chain
 
-Each record's hash covers the previous record's hash, and each hash is Ed25519
-signed. The two answer different questions: the chain says *was anything changed
-or removed*, the signature says *did this come from the system that claims to
-have written it*. The chain is verifiable by anyone with the records and a
-SHA-256 implementation — which is why the demo page can re-verify honestly with
-no server.
+Each record's hash covers the previous record's hash, and each hash is signed.
+The two answer different questions: the chain says *was anything changed or
+removed*, the signature says *did this come from the system that claims to have
+written it*. The chain needs no key to verify, which is why the demo page can
+re-verify in a visitor's own browser.
 
-Storage is append-only, enforced by SQLite triggers rather than by convention.
+Storage is append-only, enforced by SQLite triggers rather than by convention,
+and appends are atomic so concurrent writers cannot fork the chain.
+
+## Where the signing key lives
+
+A key in a file is a development convenience, and the first thing a lender's
+security review will object to. So the signer is pluggable:
+
+```python
+from custody.signing import KeyVaultSigner
+ledger = Ledger(policy="uw-v3", signer=KeyVaultSigner(vault_url, "custody"))
+```
+
+The private key never enters the process. Custody sends a digest and gets a
+signature back; the most an attacker gets from a compromised host is the ability
+to sign while they hold the credential, which the vault logs.
+
+**Azure Key Vault has no Ed25519** -- EC and RSA only, and AWS KMS is the same.
+So the algorithm is a parameter, not a constant: `ed25519` locally,
+`ecdsa-p256-sha256` (ES256) in a vault. It is written into the hashed body of
+every record, so a downgraded algorithm claim breaks the chain before anyone
+reaches a signature check.
+
+```bash
+az keyvault key create --vault-name <vault> --name custody --kty EC --curve P-256
+export CUSTODY_KEY_VAULT=https://<vault>.vault.azure.net/
+export CUSTODY_KEY_NAME=custody
+```
+
+## Verifying without trusting us
+
+`verify_packet.py` is a single file with no dependency on this package and
+nothing outside the standard library. An auditor reads it end to end in a few
+minutes and satisfies themselves the cryptography is real:
+
+```bash
+python3 verify_packet.py packet.json
+```
+
+With `cryptography` installed it checks signatures too; without it, it checks
+the chain and says plainly that it did not check signatures rather than printing
+a bare OK. It also states what it cannot prove -- that the records are *true*,
+and that nothing was withheld -- because a verifier that only ever says OK
+teaches people to over-read it.
 
 ## Install and run it
 

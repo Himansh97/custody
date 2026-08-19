@@ -26,11 +26,7 @@ import hashlib
 import json
 from typing import Any, Iterable
 
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-    Ed25519PrivateKey,
-    Ed25519PublicKey,
-)
+from .signing import ED25519, LocalSigner, verify_signature
 
 # The prev_hash of the first record in a chain. Sixty-four zeroes is a value no
 # SHA-256 digest can collide with in practice, so "is this genesis?" needs no
@@ -98,12 +94,27 @@ def compute_hash(record: dict[str, Any], prev_hash: str) -> str:
     return digest.hexdigest()
 
 
-def seal(record: dict[str, Any], prev_hash: str, key: Ed25519PrivateKey) -> dict[str, Any]:
-    """Attach prev_hash, hash and signature. Returns a new dict."""
-    sealed = dict(record)
+def seal(record: dict[str, Any], prev_hash: str, signer) -> dict[str, Any]:
+    """Attach the algorithm, prev_hash, hash and signature. Returns a new dict.
+
+    `sig_alg` goes into the record *body*, so it is covered by the hash. An
+    attacker who could rewrite it freely could claim a record was signed with
+    something weaker than it was; here that claim breaks the chain before anyone
+    gets as far as checking a signature.
+
+    A raw private key is still accepted for callers written against the earlier
+    signature, and is wrapped in a LocalSigner.
+    """
+    if not hasattr(signer, "sign") or not hasattr(signer, "algorithm"):
+        signer = LocalSigner(signer, ED25519)
+
+    body = dict(record)
+    body["sig_alg"] = signer.algorithm
+
+    sealed = dict(body)
     sealed["prev_hash"] = prev_hash
-    sealed["hash"] = compute_hash(record, prev_hash)
-    sealed["signature"] = key.sign(bytes.fromhex(sealed["hash"])).hex()
+    sealed["hash"] = compute_hash(body, prev_hash)
+    sealed["signature"] = signer.sign(bytes.fromhex(sealed["hash"])).hex()
     return sealed
 
 
@@ -118,9 +129,7 @@ class ChainError(Exception):
         super().__init__(f"{where}: {reason}")
 
 
-def verify_chain(
-    records: Iterable[dict[str, Any]], public_key: Ed25519PublicKey | None = None
-) -> None:
+def verify_chain(records: Iterable[dict[str, Any]], public_key=None) -> None:
     """Recompute the whole chain from genesis. Raises `ChainError` on the first break.
 
     Naming *which* record broke is the point. "Verification failed" tells an
@@ -153,11 +162,13 @@ def verify_chain(
             signature = record.get("signature")
             if not signature:
                 raise ChainError(index, rid, "no signature")
-            try:
-                public_key.verify(bytes.fromhex(signature), bytes.fromhex(expected))
-            except (InvalidSignature, ValueError):
+            algorithm = record.get("sig_alg", ED25519)
+            if not verify_signature(
+                public_key, bytes.fromhex(signature), bytes.fromhex(expected), algorithm
+            ):
                 raise ChainError(
-                    index, rid, "signature does not verify against this key"
+                    index, rid,
+                    f"signature ({algorithm}) does not verify against this key",
                 ) from None
 
         prev = record["hash"]
