@@ -23,8 +23,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Callable
 
 from .chain import GENESIS
 
@@ -63,9 +64,25 @@ _GUARDS = (
 
 
 class Store:
+    """Thread-safe by construction, because the chain requires it.
+
+    Appending is a read-modify-write: read the head hash, seal against it,
+    insert. Two writers interleaving there both chain onto the same head and
+    produce a *fork* -- two records claiming the same predecessor -- which
+    verification correctly rejects, on a ledger where nobody did anything wrong.
+
+    So the lock is not really about SQLite's threading rules, though it satisfies
+    those too. It is what makes the chain well-defined under concurrency.
+    Serialising writes to an audit ledger costs nothing anybody will notice.
+    """
+
     def __init__(self, path: str | Path = ":memory:"):
         self.path = str(path)
-        self._db = sqlite3.connect(self.path)
+        # check_same_thread=False is safe only because every access below is
+        # taken under _lock. Removing the lock without removing this would
+        # reintroduce races SQLite would otherwise have refused outright.
+        self._db = sqlite3.connect(self.path, check_same_thread=False)
+        self._lock = threading.RLock()
         self._db.row_factory = sqlite3.Row
         self._db.executescript(_SCHEMA)
         for guard in _GUARDS:
@@ -74,8 +91,26 @@ class Store:
 
     # ------------------------------------------------------------------ write
 
+    def append_chained(self, record: dict[str, Any],
+                       seal: Callable[[dict[str, Any], str], dict[str, Any]]) -> dict[str, Any]:
+        """Seal against the current head and insert, atomically.
+
+        The only correct way to add to a chain. `seal` receives the record and
+        the head hash it must chain onto, and the whole read-seal-write happens
+        under one lock so no other writer can slip between the read and the
+        insert.
+        """
+        with self._lock:
+            sealed = seal(record, self._head_hash_locked())
+            self._insert_locked(sealed)
+            return sealed
+
     def append(self, record: dict[str, Any]) -> None:
-        """The only way anything enters this store."""
+        """Insert an already-sealed record. Prefer `append_chained`."""
+        with self._lock:
+            self._insert_locked(record)
+
+    def _insert_locked(self, record: dict[str, Any]) -> None:
         self._db.execute(
             "INSERT INTO records (record_id, loan, ts, model, principal, body, "
             "prev_hash, hash, signature) VALUES (?,?,?,?,?,?,?,?,?)",
@@ -95,6 +130,10 @@ class Store:
 
     def head_hash(self) -> str:
         """The hash the next record must chain onto."""
+        with self._lock:
+            return self._head_hash_locked()
+
+    def _head_hash_locked(self) -> str:
         row = self._db.execute("SELECT hash FROM records ORDER BY seq DESC LIMIT 1").fetchone()
         return row["hash"] if row else GENESIS
 
@@ -131,12 +170,17 @@ class Store:
         return list(self._rows(f"SELECT body FROM records{where} ORDER BY seq", tuple(args)))
 
     def loans(self) -> list[str]:
-        return [r["loan"] for r in self._db.execute(
-            "SELECT DISTINCT loan FROM records ORDER BY loan")]
+        with self._lock:
+            return [r["loan"] for r in self._db.execute(
+                "SELECT DISTINCT loan FROM records ORDER BY loan")]
 
-    def _rows(self, sql: str, args: tuple = ()) -> Iterator[dict[str, Any]]:
-        for row in self._db.execute(sql, args):
-            yield json.loads(row["body"])
+    def _rows(self, sql: str, args: tuple = ()) -> list[dict[str, Any]]:
+        # Materialised inside the lock rather than yielded: a generator would
+        # hand the live cursor to the caller and read from it after the lock is
+        # gone.
+        with self._lock:
+            return [json.loads(row["body"]) for row in self._db.execute(sql, args)]
 
     def close(self) -> None:
-        self._db.close()
+        with self._lock:
+            self._db.close()

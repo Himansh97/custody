@@ -268,7 +268,10 @@ class Ledger:
         return record_id
 
     def _append(self, record: dict[str, Any]) -> None:
-        self.store.append(seal(record, self.store.head_hash(), self.key))
+        # Atomic read-seal-write. Sealing against a head read in a separate call
+        # lets two concurrent writers chain onto the same predecessor and fork
+        # the chain.
+        self.store.append_chained(record, lambda r, head: seal(r, head, self.key))
 
     # --------------------------------------------------------------- read side
 
