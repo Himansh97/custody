@@ -89,9 +89,11 @@ Storage is append-only, enforced by SQLite triggers rather than by convention.
 
 ## Install and run it
 
+Not on PyPI yet, so install from the repo:
+
 ```bash
-pip install custody-ledger          # one dependency: cryptography
-custody keygen                      # Ed25519 signing key, mode 600
+pip install "git+https://github.com/Himansh97/custody"   # one dependency: cryptography
+custody keygen                                           # Ed25519 signing key, mode 600
 
 custody run --loan 1000254 --principal you@lender.com \
     --instruction "Extract qualifying monthly income." \
@@ -104,7 +106,7 @@ custody serve                                  # browse it at localhost:8787
 ```
 
 `custody run` calls a real model when `ANTHROPIC_API_KEY` is set
-(`pip install custody-ledger[anthropic]`), or replays a fixed response with
+(`pip install "custody-ledger[anthropic] @ git+https://github.com/Himansh97/custody"`), or replays a fixed response with
 `--replay fixture.json`. The gate neither knows nor cares which.
 
 Custody does not call your model on your behalf in library use &mdash; it wraps a
