@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "custody-ledger"
+version = "0.2.0"
+description = "A signed chain of evidence for AI decisions in mortgage lending"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Himanshu Srivastava", email = "hsrivast22@gmail.com" }]
+keywords = ["mortgage", "ai-governance", "audit", "compliance", "ll-2026-04"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Financial and Insurance Industry",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Office/Business :: Financial",
+]
+
+# Deliberately one dependency. This library is meant to sit in the call path of
+# a regulated workflow, and every package added there is another thing a
+# lender's security review has to clear and another supply-chain surface on a
+# system whose whole job is being trustworthy. Storage is stdlib sqlite3, the
+# server is stdlib http.server, and the model adapters are optional.
+dependencies = ["cryptography>=41"]
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=0.40"]
+dev = ["anthropic>=0.40"]
+
+[project.scripts]
+custody = "custody.cli:main"
+
+[project.urls]
+Homepage = "https://himansh97.github.io/custody.html"
+Source = "https://github.com/Himansh97/custody"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/custody"]

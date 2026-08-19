@@ -26,4 +26,4 @@ __all__ = [
     "PASS", "REVIEW", "REJECT", "packet", "export",
     "verify_chain", "ChainError", "MANDATE_FIELDS",
 ]
-__version__ = "0.1.0"
+__version__ = "0.2.0"

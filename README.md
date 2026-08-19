@@ -87,24 +87,46 @@ no server.
 
 Storage is append-only, enforced by SQLite triggers rather than by convention.
 
-## Run it
+## Install and run it
 
 ```bash
-python -m venv .venv && ./.venv/bin/pip install cryptography
-./.venv/bin/python demo/pipeline.py      # produces demo/ledger.json
-./.venv/bin/python demo/build_page.py    # builds the demo page from that ledger
-./.venv/bin/python tests/test_chain.py   # and test_gate, test_ledger, test_crosslang
+pip install custody-ledger          # one dependency: cryptography
+custody keygen                      # Ed25519 signing key, mode 600
+
+custody run --loan 1000254 --principal you@lender.com \
+    --instruction "Extract qualifying monthly income." \
+    --doc paystub.txt --doc w2.txt \
+    --redact "Borrower Name" --model claude-sonnet-5
+
+custody verify custody.db --public-key <hex>   # recompute the chain
+custody packet 1000254 --out packet.json       # evidence for one loan
+custody serve                                  # browse it at localhost:8787
+```
+
+`custody run` calls a real model when `ANTHROPIC_API_KEY` is set
+(`pip install custody-ledger[anthropic]`), or replays a fixed response with
+`--replay fixture.json`. The gate neither knows nor cares which.
+
+Custody does not call your model on your behalf in library use &mdash; it wraps a
+call you already make. A governance layer that requires you to rewrite your AI
+does not get adopted.
+
+## From a source checkout
+
+```bash
+python demo/pipeline.py      # the synthetic loan, produces demo/ledger.json
+python demo/build_page.py    # bakes the review page from that ledger
+python tests/test_chain.py   # and test_gate, test_ledger, test_crosslang
 node tests/verify_like_the_page.js demo/ledger.json
 ```
 
-The demo's model outputs are fixed rather than live, so the ledger is reproducible
-byte-for-byte by anyone who clones this. The gate neither knows nor cares where an
-output came from.
+The demo's model outputs are fixed, so the ledger is reproducible byte-for-byte
+by anyone who clones this.
 
 `tests/test_crosslang.py` diffs the Python and JavaScript canonicalisers against
-every shipped record. If they ever drift, the browser would report tampering on an
-honest ledger — the most damaging failure this project could have — so the
-agreement is tested rather than assumed.
+every shipped record. If they ever drift, the browser would report tampering on
+an honest ledger &mdash; the most damaging failure this project could have &mdash; so
+the agreement is tested rather than assumed.
 
 ## What this is not
 
