@@ -1,15 +1,19 @@
-"""Custody — a signed chain of evidence for AI decisions in mortgage lending.
+"""Custody -- a signed chain of evidence for AI decisions in mortgage lending.
 
-Built against the requirements of Fannie Mae Lender Letter LL-2026-04 (issued
-8 April 2026, effective 8 August 2026), which requires seller/servicers using
-AI or ML in origination, underwriting, servicing or QC to keep a per-decision
-audit record — principal, model, endpoint, redacted prompt, response treatment,
-policy version, decision outcome and timestamp — in append-only, signed form,
-queryable by loan, date, model and principal.
+Fannie Mae Lender Letter LL-2026-04 (issued 8 April 2026, effective 6 August
+2026) requires seller/servicers using AI or ML in origination or servicing to
+govern its use, extend no-less-protective governance to their vendors, and --
+on Fannie Mae's request -- promptly disclose the types of AI/ML in use, the
+purpose and manner of that use, and the safeguards implemented.
 
-This package produces that record. It is not legal advice and does not certify
-compliance; `docs/ll-2026-04.md` maps each requirement to where it is satisfied
-so a reader can judge for themselves.
+This package is one way to be able to answer that request with evidence rather
+than assertion: a per-decision record, a deterministic gate that acts as a live
+safeguard, and a hash chain the recipient can verify without access to your
+systems.
+
+The letter does not specify a record schema and does not require append-only or
+signed logs; those are this library's design choices. `docs/ll-2026-04.md` marks
+the boundary. Not legal advice, and not a statement of what Fannie Mae requires.
 """
 from .chain import ChainError, verify_chain
 from .examiner import export, packet

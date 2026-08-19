@@ -12,9 +12,12 @@ table or replace the file wholesale. It does not have to. The hash chain in
 guarantee: you cannot change a record quietly, and you cannot remove one without
 leaving a gap that verification names.
 
-The four indexed columns are not arbitrary. LL-2026-04 requires the log be
-queryable by loan, date, model and principal, so those are the four things this
-table can answer quickly and everything else is a scan.
+The four indexed columns are not arbitrary. LL-2026-04 requires a seller/servicer
+to disclose, promptly and on request, what AI it runs and for what purpose — and
+the questions that actually arrive are about a loan, a date range, a model, or a
+person. Those four are what this table answers quickly; everything else is a
+scan. (The letter names no columns and specifies no schema. This is our reading
+of what "promptly" demands, not a transcription of a requirement.)
 """
 from __future__ import annotations
 

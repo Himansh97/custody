@@ -2,13 +2,26 @@
 
 **A signed chain of evidence for AI decisions in mortgage lending.**
 
-Fannie Mae Lender Letter LL-2026-04 took effect on 8 August 2026. Seller/servicers
-using AI or ML in origination, underwriting, servicing or QC must keep a
-per-decision audit record — principal, model, endpoint, redacted prompt, response
-treatment, policy version, decision outcome, timestamp — append-only and signed,
-queryable by loan, date, model and principal. Enforcement is repurchase risk.
+Fannie Mae Lender Letter [LL-2026-04](https://singlefamily.fanniemae.com/news-events/lender-letter-ll-2026-04-governance-framework-use-artificial-intelligence-and-machine-learning)
+took effect on 6 August 2026. Seller/servicers using AI or ML in origination or
+servicing must have policies governing its development, use and maintenance,
+must extend governance no less protective to their vendors, and **on Fannie
+Mae's request must promptly disclose the types of AI/ML in use, the purpose and
+manner of that use, and the safeguards implemented to mitigate the risks.**
 
-Custody produces that record.
+There are two ways to answer that request. One is a document describing what you
+intend to happen. The other is a record of what did happen, decision by decision,
+that the person asking can verify without taking your word for it.
+
+Custody produces the second.
+
+**It is worth being precise, because vendor summaries of this letter are not.**
+LL-2026-04 does not specify a record schema, does not name any fields, and does
+not require append-only or signed logs. The design below is one implementation of
+the letter's disclosure and safeguard obligations — a defensible one, and the one
+this library takes. It is not a transcription of Fannie Mae's instructions.
+`docs/ll-2026-04.md` sets out the letter's actual requirements and marks the
+boundary between them and our choices.
 
 **[Live demo](https://himansh97.github.io/custody.html)** — a synthetic loan file
 through five AI steps, with the hash chain re-verified in your own browser. Break
@@ -42,7 +55,7 @@ with ledger.decision(loan="1000254", principal="jane@lender.com",
         d.route_to_human(queue="uw-review")
 ```
 
-Every field the mandate names is filled as a side effect of normal use. A decision
+Every field is filled as a side effect of normal use. A decision
 that is opened and abandoned still writes a record. One that raises writes a
 record and re-raises. An audit trail with holes where the awkward cases were is
 worse than none, because it looks complete.
@@ -60,8 +73,8 @@ it.
 | Closed vocabulary | a classification outside its allowed set |
 | Confidence floor | *routes to a human* below threshold — not being sure is not being wrong |
 
-Verdicts are `pass` / `review` / `reject`, and that verdict is the mandate's
-`response_treatment` field.
+Verdicts are `pass` / `review` / `reject`. That verdict is the recorded
+`response_treatment` — the evidence that a safeguard ran and what it concluded.
 
 ## The chain
 
@@ -95,13 +108,14 @@ agreement is tested rather than assumed.
 
 ## What this is not
 
-Not legal advice, and it does not certify compliance. It does no bias or
-fair-lending testing — a real LL-2026-04 obligation, a separate product, and
-vendors already occupy it. It writes to no loan origination system. It cannot
+Not legal advice, it does not certify compliance, and it is not a statement of
+what Fannie Mae requires. It does no bias or fair-lending
+testing — that is an ECOA and fair-lending obligation rather than something this
+letter specifies, it is a separate product, and vendors already occupy it. It writes to no loan origination system. It cannot
 inventory models it never sees.
 
-`docs/ll-2026-04.md` maps the letter's requirements to where they are met and
-states plainly where they are not.
+`docs/ll-2026-04.md` sets out what the letter actually says, what Custody helps
+with, and the five obligations it does not touch at all.
 
 ## Data
 

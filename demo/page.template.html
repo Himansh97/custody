@@ -225,22 +225,30 @@ footer a{color:inherit}
   <p class="eyebrow">Custody</p>
   <h1>Prove what your AI did to a loan.</h1>
   <p class="lede">
-    Every AI decision on a loan file is recorded, gated, and chained &mdash; so when an
-    examiner, an investor, or a GSE counterparty asks what happened, the answer is
-    an artifact they can verify themselves rather than an assurance they have to
-    accept.
+    Every AI decision on a loan file is recorded, gated, and chained &mdash; so when a
+    GSE, an examiner or an investor asks what your AI did and what stopped it going
+    wrong, the answer is an artifact they can verify themselves rather than an
+    assurance they have to accept.
   </p>
   <div class="mandate">
     <p>
-      <strong>Fannie Mae Lender Letter LL-2026-04</strong> took effect on 8 August 2026.
-      Seller/servicers using AI or ML in origination, underwriting, servicing or QC
-      must keep a per-decision record of
-      <code>principal, model, endpoint, redacted prompt, response treatment, policy
-      version, decision outcome</code> and <code>timestamp</code> &mdash; append-only and
-      signed, queryable by loan, date, model and principal. Enforcement is repurchase
-      risk.
+      <strong>Fannie Mae Lender Letter LL-2026-04</strong> took effect on 6 August 2026.
+      Seller/servicers using AI or ML in origination or servicing must govern its
+      development and use, extend no-less-protective governance to their vendors, and
+      <strong>on Fannie Mae&rsquo;s request promptly disclose the types of AI/ML in use, the
+      purpose and manner of that use, and the safeguards implemented</strong> to mitigate
+      the risks.
     </p>
-    <span class="cite">The ledger below is a real one, produced by the library in this project</span>
+    <p style="margin-top:10px">
+      There are two ways to answer that request: a document describing what you intend to
+      happen, or a record of what did happen that the person asking can verify for
+      themselves. This is the second.
+    </p>
+    <span class="cite">
+      The letter specifies no record schema and does not require signed or append-only
+      logs &mdash; that design is ours, not Fannie Mae&rsquo;s. Read the letter:
+      singlefamily.fanniemae.com &rarr; Lender Letter LL-2026-04
+    </span>
   </div>
 </header>
 
@@ -285,7 +293,8 @@ footer a{color:inherit}
   <p class="sub">
     The packet for one loan: every decision, in order, including the ones that were
     rejected. It carries the public key and the records, so the recipient verifies it
-    without access to any of the lender&rsquo;s systems.
+    without access to any of the lender&rsquo;s systems &mdash; which is what turns a
+    disclosure into evidence.
   </p>
   <div class="grid" id="packet"></div>
   <p class="note" id="packetNote"></p>
@@ -295,16 +304,19 @@ footer a{color:inherit}
   <h3>What this is, and what it is not</h3>
   <p>
     <strong>It is</strong> a Python library and an append-only, hash-chained,
-    Ed25519-signed ledger that captures every field LL-2026-04 names, plus a
-    deterministic gate that decides the <code>response_treatment</code> on each output:
+    Ed25519-signed ledger of AI decisions, plus a deterministic gate &mdash; a live
+    safeguard, and the evidence that one ran &mdash; deciding the
+    <code>response_treatment</code> on each output:
     figures must appear in a source document, fields must cite one, classifications must
     land in a closed set, and anything under the confidence floor goes to a person.
   </p>
   <p>
-    <strong>It is not</strong> legal advice and does not certify compliance. It does no
-    bias or fair-lending testing &mdash; that is a separate obligation and a separate
-    product. It writes to no loan origination system. And there is no model anywhere in
-    the verification path: a model judging another model is not evidence.
+    <strong>It is not</strong> legal advice, does not certify compliance, and is not a
+    statement of what Fannie Mae requires &mdash; the letter mandates governance and
+    disclosure, not this schema. It does no bias or fair-lending testing, writes to no
+    loan origination system, and cannot inventory models it never sees. There is no
+    model anywhere in the verification path: a model judging another model is not
+    evidence.
   </p>
   <p class="foot-meta" id="footMeta"></p>
 </footer>
@@ -319,8 +331,10 @@ footer a{color:inherit}
 var BUNDLE = JSON.parse(document.getElementById("ledger-data").textContent);
 var LOAN = Object.keys(BUNDLE.packets)[0];
 
-/* The eight fields the mandate names. Marked in the detail view so a reader can
-   check the claim against the letter rather than take our word for it. */
+/* The eight fields Custody records on every AI decision. These are this
+   library's design, not a schema LL-2026-04 dictates -- the letter requires
+   governance and disclosure on request and names no fields at all. They are
+   marked in the detail view so a reader can see exactly what is captured. */
 var MANDATE = ["principal","model","endpoint","prompt_redacted",
                "response_treatment","policy_version","decision_outcome","timestamp"];
 
@@ -481,7 +495,7 @@ function renderPacket(){
     [s.human_reviews, "recorded human reviews", "ok"],
     [s.rejected, "outputs the gate refused", "warn"],
     [s.routed_to_human, "routed to a person", "warn"],
-    [p.mandate_coverage.complete ? "8 / 8" : "gaps", "mandate fields present on every record",
+    [p.mandate_coverage.complete ? "8 / 8" : "gaps", "recorded fields present on every record",
       p.mandate_coverage.complete ? "ok" : "warn"]
   ];
   $("packet").innerHTML = cells.map(function(c){
