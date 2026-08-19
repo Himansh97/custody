@@ -30,7 +30,9 @@ dependencies = ["cryptography>=41"]
 anthropic = ["anthropic>=0.40"]
 azure = ["azure-identity>=1.15", "azure-keyvault-keys>=4.9"]
 azure-openai = ["openai>=1.40", "azure-identity>=1.15"]
+postgres = ["psycopg[binary]>=3.1"]
 dev = [
+  "psycopg[binary]>=3.1",
   "anthropic>=0.40",
   "openai>=1.40",
   "azure-identity>=1.15",

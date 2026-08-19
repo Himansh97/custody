@@ -84,8 +84,35 @@ removed*, the signature says *did this come from the system that claims to have
 written it*. The chain needs no key to verify, which is why the demo page can
 re-verify in a visitor's own browser.
 
-Storage is append-only, enforced by SQLite triggers rather than by convention,
-and appends are atomic so concurrent writers cannot fork the chain.
+Storage is append-only, enforced by database triggers rather than by convention.
+The chain cannot fork because `prev_hash` is `UNIQUE` — two writers cannot both
+chain onto the same predecessor, and the second one is refused rather than
+quietly writing a ledger that will not verify. Locking is an optimisation on top
+of that, not the guarantee.
+
+### SQLite or Postgres
+
+SQLite is the default and needs nothing installed. Run more than one application
+instance and you want Postgres, where the same guarantees hold and a process
+lock would not:
+
+```bash
+pip install "custody-ledger[postgres]"
+custody run --db postgresql://user:pw@host/custody ...
+```
+
+```python
+Ledger(policy="income-calc-v3", signer=signer,
+       path="postgresql://user:pw@host/custody")
+```
+
+One conformance suite runs against both backends, so they cannot drift into
+disagreeing about what verifies. On Postgres, also revoke the privileges — the
+trigger should be your backstop, not your only defence:
+
+```sql
+REVOKE UPDATE, DELETE ON records FROM custody_app;
+```
 
 ## Which model you call
 

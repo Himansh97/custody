@@ -31,7 +31,7 @@ from typing import Any, Callable, Iterable, Sequence
 from .chain import seal
 from .signing import ED25519, LocalSigner, public_bytes
 from .redact import redact_value
-from .store import Store
+from .store import Store, open_store
 from .verify import REJECT, REVIEW, Verdict, gate as run_gate
 
 # The eight fields LL-2026-04 requires on every AI decision record. Named here
@@ -201,7 +201,7 @@ class Ledger:
         signing_key=None,
         signer=None,
         store: Store | None = None,
-        path: str | Path = ":memory:",
+        path: str | Path = ":memory:",   # or a postgresql:// DSN
     ):
         """`signer` is the way in: a LocalSigner, a KeyVaultSigner, or anything
         with `.algorithm`, `.sign(digest)` and `.public_key_bytes()`.
@@ -219,7 +219,7 @@ class Ledger:
             )
         self.policy = policy
         self.signer = signer
-        self.store = store or Store(path)
+        self.store = store or open_store(path)
 
     @property
     def algorithm(self) -> str:

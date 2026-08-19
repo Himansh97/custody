@@ -30,8 +30,8 @@ This is the control Custody exists to satisfy, and it satisfies it unusually wel
 
 | Requirement | How |
 |---|---|
-| Logs protected from **modification** | SQLite triggers abort any `UPDATE`. Beyond that, each record's hash covers the previous one, so an edit made by any route — a SQL client, a file editor, restoring an altered backup — is detectable by anyone holding the records. |
-| Logs protected from **deletion** | Triggers abort `DELETE`; a removed record leaves a gap the chain names. |
+| Logs protected from **modification** | Database triggers abort any `UPDATE` — on SQLite and on Postgres alike, so the control does not weaken when you move off a single file. Beyond that, each record's hash covers the previous one, so an edit made by any route — a SQL client, a file editor, restoring an altered backup — is detectable by anyone holding the records. |
+| Logs protected from **deletion** | Triggers abort `DELETE`; a removed record leaves a gap the chain names. On Postgres, `REVOKE UPDATE, DELETE ON records FROM <app_role>` is the stronger control and the trigger is then a backstop rather than the only defence. |
 | Logs **monitored and reviewed** for unauthorised modification | `custody verify` recomputes the whole chain and reports the first broken record by id. Run it on a schedule and you have continuous detection rather than periodic hope. |
 | **Independent** security assessment | `verify_packet.py` is one file, no dependency on this package, nothing outside the standard library. Your assessor verifies the evidence themselves rather than accepting our tooling's word. |
 | Log **retention periods** | **Not addressed — see gaps.** |
@@ -59,8 +59,10 @@ why Custody requires it and will not default it.
 
 > *"Encrypting data in-transit and at-rest."*
 
-**At rest: no.** The SQLite file is plaintext. Deploy on encrypted storage
-(Azure Disk Encryption, an encrypted volume) or the requirement is unmet. There
+**At rest: no.** Records are stored as plaintext JSON — a SQLite file, or a
+Postgres table. Deploy on encrypted storage (Azure Disk Encryption, an encrypted
+volume, or a managed Postgres with encryption at rest enabled) or the requirement
+is unmet. There
 is a real design tension here worth stating rather than hiding: an audit record
 that an assessor can read directly is more useful as evidence, and one that is
 encrypted at the application layer is more defensible as storage. Custody
@@ -75,9 +77,10 @@ TLS in front of it.
 
 One runtime dependency, `cryptography`, chosen deliberately: this sits in the
 call path of a regulated workflow and every package added there is another thing
-your review has to clear. Storage is stdlib `sqlite3`, the server is stdlib
-`http.server`, and the model adapters are optional extras you install only if you
-use them.
+your review has to clear. Default storage is stdlib `sqlite3`, the server is
+stdlib `http.server`, and the model adapters and the Postgres backend are
+optional extras you install only if you use them — a lender staying on SQLite
+never takes on `psycopg`.
 
 **Custody uses no AI/ML itself.** The gate is arithmetic and string comparison,
 and there is deliberately no model anywhere in the verification path — so
@@ -92,8 +95,9 @@ establish and exactly what an assessor will ask.
 
 ## §5 Business Continuity
 
-Nothing. Back up the database like any other system of record. Backups verify
-independently: a restored file either verifies or it does not, so a corrupted or
+Nothing. Back up the database like any other system of record — and on Postgres,
+use the replication and point-in-time recovery you already run. Backups verify
+independently: a restored ledger either verifies or it does not, so a corrupted or
 substituted backup is detectable rather than merely suspected.
 
 ---

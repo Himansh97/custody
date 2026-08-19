@@ -1,35 +1,102 @@
-"""Append-only storage.
+"""Append-only storage, on SQLite or Postgres.
 
 "Append-only" enforced by a code review is a promise. Enforced by the database
-is a property. This store installs SQLite triggers that abort any UPDATE or
-DELETE against the ledger table, so the guarantee survives someone opening the
-file with a SQL client at two in the morning — which is exactly the scenario an
-examiner is asking about.
+is a property. Both backends install triggers that abort any UPDATE or DELETE
+against the ledger, so the guarantee survives someone opening the database with a
+SQL client at two in the morning -- which is exactly the scenario an examiner is
+asking about.
 
-That does not make the file immutable; anyone with write access can drop the
-table or replace the file wholesale. It does not have to. The hash chain in
-`chain.py` makes *that* detectable, and the two together are the actual
-guarantee: you cannot change a record quietly, and you cannot remove one without
-leaving a gap that verification names.
+That does not make the data immutable; anyone with sufficient privilege can drop
+the table or replace the file. It does not have to. The hash chain makes *that*
+detectable, and the two together are the actual guarantee: you cannot change a
+record quietly, and you cannot remove one without leaving a gap that verification
+names.
 
-The four indexed columns are not arbitrary. LL-2026-04 requires a seller/servicer
-to disclose, promptly and on request, what AI it runs and for what purpose — and
-the questions that actually arrive are about a loan, a date range, a model, or a
-person. Those four are what this table answers quickly; everything else is a
-scan. (The letter names no columns and specifies no schema. This is our reading
-of what "promptly" demands, not a transcription of a requirement.)
+## Why the chain cannot fork
+
+Appending is a read-modify-write: read the head hash, seal against it, insert. If
+two writers interleave there, both seal against the same predecessor and the
+ledger gains two records claiming the same `prev_hash`. That is a fork, and
+verification correctly rejects it -- on a ledger where nobody did anything wrong.
+
+A process-level lock fixes that for one process, which is exactly as far as it
+goes. The moment there are two application instances -- which is the whole reason
+to want Postgres -- the lock protects nothing.
+
+So the real guarantee is a **unique constraint on `prev_hash`**. A fork is not
+unlikely, it is not permitted: the second writer's insert violates uniqueness and
+fails. Locking is then only an optimisation to keep well-behaved writers from
+colliding, and correctness no longer depends on it.
+
+The four indexed columns follow LL-2026-04's disclosure obligation: the questions
+that actually arrive are about a loan, a date range, a model, or a person.
 """
 from __future__ import annotations
 
 import json
-import sqlite3
 import threading
 from pathlib import Path
 from typing import Any, Callable
 
 from .chain import GENESIS
 
-_SCHEMA = """
+# Namespaced so an application using Postgres advisory locks for its own purposes
+# cannot collide with ours by accident.
+_ADVISORY_LOCK_KEY = 0x00C0570D
+
+
+class ChainForked(Exception):
+    """Another writer sealed against the same predecessor.
+
+    Not corruption. The insert was refused precisely so the ledger stays
+    verifiable, and the caller should re-read the head and try again.
+    """
+
+
+class _BaseStore:
+    """Shared record/row mapping. Backends supply connection and dialect."""
+
+    placeholder = "?"
+
+    def _row(self, record: dict[str, Any]) -> tuple:
+        return (
+            record["record_id"],
+            record["loan"],
+            record["timestamp"],
+            record.get("model"),
+            record["principal"],
+            json.dumps(record, sort_keys=True, default=str),
+            record["prev_hash"],
+            record["hash"],
+            record["signature"],
+        )
+
+    @property
+    def _insert_sql(self) -> str:
+        marks = ",".join([self.placeholder] * 9)
+        return (
+            "INSERT INTO records (record_id, loan, ts, model, principal, body, "
+            f"prev_hash, hash, signature) VALUES ({marks})"
+        )
+
+    def _where(self, loan, model, principal, since, until) -> tuple[str, list]:
+        clauses, args = [], []
+        for column, value in (("loan", loan), ("model", model), ("principal", principal)):
+            if value is not None:
+                clauses.append(f"{column} = {self.placeholder}")
+                args.append(value)
+        if since is not None:
+            clauses.append(f"ts >= {self.placeholder}")
+            args.append(since)
+        if until is not None:
+            clauses.append(f"ts <= {self.placeholder}")
+            args.append(until)
+        return (f" WHERE {' AND '.join(clauses)}" if clauses else ""), args
+
+
+# -------------------------------------------------------------------- sqlite
+
+_SQLITE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS records (
     seq        INTEGER PRIMARY KEY AUTOINCREMENT,
     record_id  TEXT NOT NULL UNIQUE,
@@ -38,22 +105,20 @@ CREATE TABLE IF NOT EXISTS records (
     model      TEXT,
     principal  TEXT NOT NULL,
     body       TEXT NOT NULL,
-    prev_hash  TEXT NOT NULL,
+    -- UNIQUE is the guarantee, not the lock: two writers cannot both chain onto
+    -- the same predecessor, so the chain cannot fork even under a race.
+    prev_hash  TEXT NOT NULL UNIQUE,
     hash       TEXT NOT NULL UNIQUE,
     signature  TEXT NOT NULL
 );
 
--- The four dimensions the mandate names.
 CREATE INDEX IF NOT EXISTS ix_records_loan      ON records(loan);
 CREATE INDEX IF NOT EXISTS ix_records_ts        ON records(ts);
 CREATE INDEX IF NOT EXISTS ix_records_model     ON records(model);
 CREATE INDEX IF NOT EXISTS ix_records_principal ON records(principal);
 """
 
-# Written as one statement per trigger because SQLite will not create both from
-# a single execute, and silently creating only the first would leave the weaker
-# half of the guarantee in place with nothing to show for it.
-_GUARDS = (
+_SQLITE_GUARDS = (
     """CREATE TRIGGER IF NOT EXISTS records_are_immutable
        BEFORE UPDATE ON records
        BEGIN SELECT RAISE(ABORT, 'custody: the ledger is append-only'); END""",
@@ -63,111 +128,61 @@ _GUARDS = (
 )
 
 
-class Store:
-    """Thread-safe by construction, because the chain requires it.
-
-    Appending is a read-modify-write: read the head hash, seal against it,
-    insert. Two writers interleaving there both chain onto the same head and
-    produce a *fork* -- two records claiming the same predecessor -- which
-    verification correctly rejects, on a ledger where nobody did anything wrong.
-
-    So the lock is not really about SQLite's threading rules, though it satisfies
-    those too. It is what makes the chain well-defined under concurrency.
-    Serialising writes to an audit ledger costs nothing anybody will notice.
-    """
+class Store(_BaseStore):
+    """SQLite. One process, one file -- good for a pilot, not for two instances."""
 
     def __init__(self, path: str | Path = ":memory:"):
+        import sqlite3
+
+        self._sqlite3 = sqlite3
         self.path = str(path)
-        # check_same_thread=False is safe only because every access below is
-        # taken under _lock. Removing the lock without removing this would
-        # reintroduce races SQLite would otherwise have refused outright.
+        # check_same_thread=False is safe only because every access is taken
+        # under _lock. Removing the lock without removing this reintroduces
+        # races SQLite would otherwise have refused outright.
         self._db = sqlite3.connect(self.path, check_same_thread=False)
         self._lock = threading.RLock()
         self._db.row_factory = sqlite3.Row
-        self._db.executescript(_SCHEMA)
-        for guard in _GUARDS:
+        self._db.executescript(_SQLITE_SCHEMA)
+        for guard in _SQLITE_GUARDS:
             self._db.execute(guard)
         self._db.commit()
 
-    # ------------------------------------------------------------------ write
-
     def append_chained(self, record: dict[str, Any],
                        seal: Callable[[dict[str, Any], str], dict[str, Any]]) -> dict[str, Any]:
-        """Seal against the current head and insert, atomically.
-
-        The only correct way to add to a chain. `seal` receives the record and
-        the head hash it must chain onto, and the whole read-seal-write happens
-        under one lock so no other writer can slip between the read and the
-        insert.
-        """
         with self._lock:
-            sealed = seal(record, self._head_hash_locked())
-            self._insert_locked(sealed)
+            sealed = seal(record, self._head_locked())
+            try:
+                self._db.execute(self._insert_sql, self._row(sealed))
+            except self._sqlite3.IntegrityError as exc:
+                if "prev_hash" in str(exc):
+                    raise ChainForked(str(exc)) from None
+                raise
+            self._db.commit()
             return sealed
 
     def append(self, record: dict[str, Any]) -> None:
-        """Insert an already-sealed record. Prefer `append_chained`."""
         with self._lock:
-            self._insert_locked(record)
-
-    def _insert_locked(self, record: dict[str, Any]) -> None:
-        self._db.execute(
-            "INSERT INTO records (record_id, loan, ts, model, principal, body, "
-            "prev_hash, hash, signature) VALUES (?,?,?,?,?,?,?,?,?)",
-            (
-                record["record_id"],
-                record["loan"],
-                record["timestamp"],
-                record.get("model"),
-                record["principal"],
-                json.dumps(record, sort_keys=True, default=str),
-                record["prev_hash"],
-                record["hash"],
-                record["signature"],
-            ),
-        )
-        self._db.commit()
+            self._db.execute(self._insert_sql, self._row(record))
+            self._db.commit()
 
     def head_hash(self) -> str:
-        """The hash the next record must chain onto."""
         with self._lock:
-            return self._head_hash_locked()
+            return self._head_locked()
 
-    def _head_hash_locked(self) -> str:
-        row = self._db.execute("SELECT hash FROM records ORDER BY seq DESC LIMIT 1").fetchone()
+    def _head_locked(self) -> str:
+        row = self._db.execute(
+            "SELECT hash FROM records ORDER BY seq DESC LIMIT 1").fetchone()
         return row["hash"] if row else GENESIS
 
-    # ------------------------------------------------------------------- read
-
     def all(self) -> list[dict[str, Any]]:
-        return list(self._rows("SELECT body FROM records ORDER BY seq"))
+        return self._rows("SELECT body FROM records ORDER BY seq")
 
     def by_loan(self, loan: str) -> list[dict[str, Any]]:
-        return list(self._rows("SELECT body FROM records WHERE loan = ? ORDER BY seq", (loan,)))
+        return self._rows("SELECT body FROM records WHERE loan = ? ORDER BY seq", (loan,))
 
-    def query(
-        self,
-        *,
-        loan: str | None = None,
-        model: str | None = None,
-        principal: str | None = None,
-        since: str | None = None,
-        until: str | None = None,
-    ) -> list[dict[str, Any]]:
-        """The mandate's four dimensions, combinable."""
-        clauses, args = [], []
-        for column, value in (("loan", loan), ("model", model), ("principal", principal)):
-            if value is not None:
-                clauses.append(f"{column} = ?")
-                args.append(value)
-        if since is not None:
-            clauses.append("ts >= ?")
-            args.append(since)
-        if until is not None:
-            clauses.append("ts <= ?")
-            args.append(until)
-        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
-        return list(self._rows(f"SELECT body FROM records{where} ORDER BY seq", tuple(args)))
+    def query(self, *, loan=None, model=None, principal=None, since=None, until=None):
+        where, args = self._where(loan, model, principal, since, until)
+        return self._rows(f"SELECT body FROM records{where} ORDER BY seq", tuple(args))
 
     def loans(self) -> list[str]:
         with self._lock:
@@ -179,8 +194,144 @@ class Store:
         # hand the live cursor to the caller and read from it after the lock is
         # gone.
         with self._lock:
-            return [json.loads(row["body"]) for row in self._db.execute(sql, args)]
+            return [json.loads(r["body"]) for r in self._db.execute(sql, args)]
 
     def close(self) -> None:
         with self._lock:
             self._db.close()
+
+
+# ------------------------------------------------------------------ postgres
+
+_PG_SCHEMA = """
+CREATE TABLE IF NOT EXISTS records (
+    seq        BIGSERIAL PRIMARY KEY,
+    record_id  TEXT NOT NULL UNIQUE,
+    loan       TEXT NOT NULL,
+    ts         TEXT NOT NULL,
+    model      TEXT,
+    principal  TEXT NOT NULL,
+    body       TEXT NOT NULL,
+    prev_hash  TEXT NOT NULL UNIQUE,
+    hash       TEXT NOT NULL UNIQUE,
+    signature  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_records_loan      ON records(loan);
+CREATE INDEX IF NOT EXISTS ix_records_ts        ON records(ts);
+CREATE INDEX IF NOT EXISTS ix_records_model     ON records(model);
+CREATE INDEX IF NOT EXISTS ix_records_principal ON records(principal);
+
+CREATE OR REPLACE FUNCTION custody_append_only() RETURNS trigger AS $fn$
+BEGIN
+    RAISE EXCEPTION 'custody: the ledger is append-only';
+END;
+$fn$ LANGUAGE plpgsql;
+"""
+
+# DROP first: CREATE TRIGGER has no IF NOT EXISTS before PG 14, and this has to
+# be idempotent across versions.
+_PG_GUARDS = (
+    "DROP TRIGGER IF EXISTS records_are_immutable ON records",
+    """CREATE TRIGGER records_are_immutable BEFORE UPDATE ON records
+       FOR EACH ROW EXECUTE FUNCTION custody_append_only()""",
+    "DROP TRIGGER IF EXISTS records_cannot_be_removed ON records",
+    """CREATE TRIGGER records_cannot_be_removed BEFORE DELETE ON records
+       FOR EACH ROW EXECUTE FUNCTION custody_append_only()""",
+)
+
+
+class PostgresStore(_BaseStore):
+    """Postgres, for when one application instance is not enough.
+
+    The trigger is the same guarantee as SQLite's. The stronger control is one
+    this cannot install for you -- revoke the privileges outright, so the trigger
+    is a backstop rather than the only defence:
+
+        REVOKE UPDATE, DELETE ON records FROM custody_app;
+
+    Serialisation is a transaction-scoped advisory lock, which works across
+    instances where a process lock does not. It is an optimisation: the unique
+    constraint on `prev_hash` is what makes a fork impossible, and a caller who
+    loses a race gets `ChainForked` and retries rather than writing a ledger that
+    will not verify.
+    """
+
+    placeholder = "%s"
+
+    def __init__(self, dsn: str, *, autocommit: bool = True):
+        try:
+            import psycopg
+        except ImportError:  # pragma: no cover - depends on the install extra
+            raise RuntimeError(
+                "Postgres support needs psycopg -- pip install custody-ledger[postgres]"
+            ) from None
+
+        self._psycopg = psycopg
+        self.dsn = dsn
+        self._db = psycopg.connect(dsn, autocommit=autocommit)
+        with self._db.cursor() as cur:
+            cur.execute(_PG_SCHEMA)
+            for guard in _PG_GUARDS:
+                cur.execute(guard)
+
+    def append_chained(self, record: dict[str, Any],
+                       seal: Callable[[dict[str, Any], str], dict[str, Any]]) -> dict[str, Any]:
+        # One transaction: take the advisory lock, read the head, insert. The
+        # lock is released when the transaction ends, whatever happens to it.
+        with self._db.transaction(), self._db.cursor() as cur:
+            cur.execute("SELECT pg_advisory_xact_lock(%s)", (_ADVISORY_LOCK_KEY,))
+            cur.execute("SELECT hash FROM records ORDER BY seq DESC LIMIT 1")
+            row = cur.fetchone()
+            sealed = seal(record, row[0] if row else GENESIS)
+            try:
+                cur.execute(self._insert_sql, self._row(sealed))
+            except self._psycopg.errors.UniqueViolation as exc:
+                if "prev_hash" in str(exc):
+                    raise ChainForked(str(exc)) from None
+                raise
+            return sealed
+
+    def append(self, record: dict[str, Any]) -> None:
+        with self._db.cursor() as cur:
+            cur.execute(self._insert_sql, self._row(record))
+
+    def head_hash(self) -> str:
+        with self._db.cursor() as cur:
+            cur.execute("SELECT hash FROM records ORDER BY seq DESC LIMIT 1")
+            row = cur.fetchone()
+            return row[0] if row else GENESIS
+
+    def all(self) -> list[dict[str, Any]]:
+        return self._rows("SELECT body FROM records ORDER BY seq")
+
+    def by_loan(self, loan: str) -> list[dict[str, Any]]:
+        return self._rows("SELECT body FROM records WHERE loan = %s ORDER BY seq", (loan,))
+
+    def query(self, *, loan=None, model=None, principal=None, since=None, until=None):
+        where, args = self._where(loan, model, principal, since, until)
+        return self._rows(f"SELECT body FROM records{where} ORDER BY seq", tuple(args))
+
+    def loans(self) -> list[str]:
+        with self._db.cursor() as cur:
+            cur.execute("SELECT DISTINCT loan FROM records ORDER BY loan")
+            return [r[0] for r in cur.fetchall()]
+
+    def _rows(self, sql: str, args: tuple = ()) -> list[dict[str, Any]]:
+        with self._db.cursor() as cur:
+            cur.execute(sql, args)
+            return [json.loads(r[0]) for r in cur.fetchall()]
+
+    def close(self) -> None:
+        self._db.close()
+
+
+# ------------------------------------------------------------------- factory
+
+
+def open_store(url: str | Path = ":memory:"):
+    """`postgresql://...` gives Postgres; anything else is a SQLite path."""
+    text = str(url)
+    if text.startswith(("postgres://", "postgresql://")):
+        return PostgresStore(text)
+    return Store(text)

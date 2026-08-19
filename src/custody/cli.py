@@ -160,16 +160,20 @@ def _load_records(source: str) -> tuple[list[dict], str | None, str]:
     a ledger that cannot say how it was signed is not self-describing and the
     person verifying it should not have to be told.
     """
-    path = pathlib.Path(source)
-    if not path.exists():
-        raise SystemExit(f"no such ledger: {path}")
-    if path.suffix == ".json":
-        bundle = json.loads(path.read_text(encoding="utf-8"))
-        records = bundle["records"]
-        embedded = bundle.get("public_key")
+    if str(source).startswith(("postgres://", "postgresql://")):
+        from .store import open_store
+        records, embedded = open_store(str(source)).all(), None
     else:
-        from .store import Store
-        records, embedded = Store(str(path)).all(), None
+        path = pathlib.Path(source)
+        if not path.exists():
+            raise SystemExit(f"no such ledger: {path}")
+        if path.suffix == ".json":
+            bundle = json.loads(path.read_text(encoding="utf-8"))
+            records = bundle["records"]
+            embedded = bundle.get("public_key")
+        else:
+            from .store import Store
+            records, embedded = Store(str(path)).all(), None
     algorithm = records[0].get("sig_alg", ED25519) if records else ED25519
     return records, embedded, algorithm
 
@@ -288,7 +292,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--policy", default="default-v1")
     p.add_argument("--floor", type=float, default=0.80)
     p.add_argument("--queue", default="review")
-    p.add_argument("--db", default=DEFAULT_DB)
+    p.add_argument("--db", default=DEFAULT_DB,
+                   help="a SQLite path, or a postgresql:// DSN")
     p.add_argument("--key", default=None)
     p.set_defaults(func=cmd_run)
 
@@ -299,14 +304,16 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("packet", help="export the chain of evidence for one loan")
     p.add_argument("loan")
-    p.add_argument("--db", default=DEFAULT_DB)
+    p.add_argument("--db", default=DEFAULT_DB,
+                   help="a SQLite path, or a postgresql:// DSN")
     p.add_argument("--key", default=None)
     p.add_argument("--out", default=None, help="write to a file instead of stdout")
     p.add_argument("--requested-by", default="examiner")
     p.set_defaults(func=cmd_packet)
 
     p = sub.add_parser("serve", help="browse and verify a ledger in your browser")
-    p.add_argument("--db", default=DEFAULT_DB)
+    p.add_argument("--db", default=DEFAULT_DB,
+                   help="a SQLite path, or a postgresql:// DSN")
     p.add_argument("--key", default=None)
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8787)

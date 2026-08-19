@@ -30,6 +30,26 @@ jobs:
     # Publishing an artifact nobody ran is how a broken release reaches people
     # who trusted the version number. The whole suite gates the upload.
     runs-on: ubuntu-latest
+
+    # A real Postgres, because the Postgres backend cannot be tested against
+    # SQLite pretending. The append-only triggers are plpgsql, the advisory
+    # lock and the UNIQUE-constraint race have no SQLite equivalent, and a
+    # backend whose tests only ever skip is a backend nobody has run.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: custody
+          POSTGRES_PASSWORD: custody
+          POSTGRES_DB: custody
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U custody"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    env:
+      CUSTODY_TEST_DSN: postgresql://custody:custody@localhost:5432/custody
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,7 +58,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          pip install -e ".[postgres]"
       - name: Run the suite
         run: |
           set -e
@@ -46,6 +66,14 @@ jobs:
             echo "--- $t"
             python "$t"
           done
+      - name: Fail if the Postgres backend was skipped
+        # The suite prints SKIP and exits 0 when no DSN is set, which is right
+        # for a laptop and wrong here: a green CI run that silently tested one
+        # backend is worse than a red one.
+        run: |
+          python tests/test_store_backends.py | tee /tmp/backends.txt
+          grep -q "PASS \[postgres\]" /tmp/backends.txt
+          ! grep -q "SKIP \[postgres\]" /tmp/backends.txt
       - name: Verify the demo ledger the way a browser would
         run: |
           python demo/pipeline.py
