@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 
-from .chain import seal
+from .chain import make_anchor, seal
 from .signing import ED25519, LocalSigner, public_bytes
 from .redact import redact_value
 from .store import Store, open_store
@@ -208,6 +208,7 @@ class Ledger:
         signer=None,
         store: Store | None = None,
         path: str | Path = ":memory:",   # or a postgresql:// DSN
+        on_append: Callable[[str], None] | None = None,
     ):
         """`signer` is the way in: a LocalSigner, a KeyVaultSigner, or anything
         with `.algorithm`, `.sign(digest)` and `.public_key_bytes()`.
@@ -226,6 +227,17 @@ class Ledger:
         self.policy = policy
         self.signer = signer
         self.store = store or open_store(path)
+        # Called with the anchor token after every append, so an operator can
+        # push it somewhere this process cannot later edit -- which is the only
+        # way a truncation of the newest records becomes detectable. Deliberately
+        # a callback rather than a built-in destination: the place that is out of
+        # reach differs per lender, and guessing wrong would be worse than asking.
+        self.on_append = on_append
+
+    @property
+    def anchor(self) -> str:
+        """What this ledger currently attests to. Record it somewhere else."""
+        return make_anchor(self.store.count(), self.store.head_hash())
 
     @property
     def algorithm(self) -> str:
@@ -304,7 +316,15 @@ class Ledger:
         # Atomic read-seal-write. Sealing against a head read in a separate call
         # lets two concurrent writers chain onto the same predecessor and fork
         # the chain.
-        self.store.append_chained(record, lambda r, head: seal(r, head, self.signer))
+        sealed = self.store.append_chained(
+            record, lambda r, head: seal(r, head, self.signer)
+        )
+        if self.on_append is not None:
+            # The record is already durable by the time this runs, so a failing
+            # sink cannot cost you the record. It is not swallowed either: a
+            # silently dead anchor is worse than no anchor, because it looks
+            # like protection right up until the day it is needed.
+            self.on_append(make_anchor(self.store.count(), sealed["hash"]))
 
     # --------------------------------------------------------------- read side
 

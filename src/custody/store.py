@@ -143,9 +143,68 @@ class Store(_BaseStore):
         self._lock = threading.RLock()
         self._db.row_factory = sqlite3.Row
         self._db.executescript(_SQLITE_SCHEMA)
+        self.migrated = self._migrate_locked()
         for guard in _SQLITE_GUARDS:
             self._db.execute(guard)
         self._db.commit()
+
+    # ------------------------------------------------------------- migration
+
+    def _prev_hash_is_unique(self) -> bool:
+        for _, name, unique, *_ in self._db.execute("PRAGMA index_list(records)"):
+            if unique and any(c[2] == "prev_hash"
+                              for c in self._db.execute(f"PRAGMA index_info({name})")):
+                return True
+        return False
+
+    def _migrate_locked(self) -> bool:
+        """Give a pre-0.5.0 ledger the UNIQUE constraint it was created without.
+
+        `CREATE TABLE IF NOT EXISTS` is a no-op on a table that already exists,
+        so a ledger opened by newer code kept the older, weaker schema and could
+        still fork -- silently, since nothing about it looks different. Detected
+        by audit rather than by anyone hitting it.
+
+        The records are copied verbatim: bodies, hashes and signatures are
+        untouched, so every chain and every signature that verified before
+        verifies after. Only the schema changes. If the ledger already contains
+        a fork, the migration refuses rather than dropping a record to make the
+        constraint fit -- discarding evidence to satisfy a schema would be the
+        single worst thing this library could do.
+        """
+        if self._prev_hash_is_unique():
+            return False
+
+        dupes = self._db.execute(
+            "SELECT prev_hash, count(*) c FROM records GROUP BY prev_hash "
+            "HAVING c > 1 LIMIT 1").fetchone()
+        if dupes:
+            raise ChainForked(
+                f"this ledger already contains a fork: {dupes[0]!r} is the predecessor "
+                f"of {dupes[1]} records. It cannot take the UNIQUE constraint until "
+                "that is resolved, and resolving it means deciding which of those "
+                "records is real — which is not a decision this library will make "
+                "for you."
+            )
+
+        self._db.execute("DROP TRIGGER IF EXISTS records_are_immutable")
+        self._db.execute("DROP TRIGGER IF EXISTS records_cannot_be_removed")
+        self._db.executescript(
+            _SQLITE_SCHEMA.replace("records", "records_migrated"))
+        self._db.execute(
+            "INSERT INTO records_migrated (seq, record_id, loan, ts, model, principal, "
+            "body, prev_hash, hash, signature) SELECT seq, record_id, loan, ts, model, "
+            "principal, body, prev_hash, hash, signature FROM records")
+        moved = self._db.execute("SELECT count(*) FROM records_migrated").fetchone()[0]
+        kept = self._db.execute("SELECT count(*) FROM records").fetchone()[0]
+        if moved != kept:
+            self._db.rollback()
+            raise ChainForked(f"migration would have lost records: {kept} -> {moved}")
+        self._db.execute("DROP TABLE records")
+        self._db.execute("ALTER TABLE records_migrated RENAME TO records")
+        self._db.executescript(_SQLITE_SCHEMA)     # indexes on the new table
+        self._db.commit()
+        return True
 
     def append_chained(self, record: dict[str, Any],
                        seal: Callable[[dict[str, Any], str], dict[str, Any]]) -> dict[str, Any]:
@@ -188,6 +247,10 @@ class Store(_BaseStore):
         with self._lock:
             return [r["loan"] for r in self._db.execute(
                 "SELECT DISTINCT loan FROM records ORDER BY loan")]
+
+    def count(self) -> int:
+        with self._lock:
+            return self._db.execute("SELECT count(*) FROM records").fetchone()[0]
 
     def _rows(self, sql: str, args: tuple = ()) -> list[dict[str, Any]]:
         # Materialised inside the lock rather than yielded: a generator would
@@ -330,6 +393,11 @@ class PostgresStore(_BaseStore):
         with self._pool.connection() as conn, conn.cursor() as cur:
             cur.execute("SELECT DISTINCT loan FROM records ORDER BY loan")
             return [r[0] for r in cur.fetchall()]
+
+    def count(self) -> int:
+        with self._pool.connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM records")
+            return cur.fetchone()[0]
 
     def _rows(self, sql: str, args: tuple = ()) -> list[dict[str, Any]]:
         with self._pool.connection() as conn, conn.cursor() as cur:

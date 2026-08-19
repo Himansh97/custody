@@ -28,4 +28,4 @@ __all__ = [
     "verify_chain", "ChainError", "MANDATE_FIELDS",
     "Signer", "LocalSigner", "KeyVaultSigner", "ED25519", "ECDSA_P256",
 ]
-__version__ = "0.5.0"
+__version__ = "0.6.0"

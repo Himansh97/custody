@@ -90,6 +90,26 @@ chain onto the same predecessor, and the second one is refused rather than
 quietly writing a ledger that will not verify. Locking is an optimisation on top
 of that, not the guarantee.
 
+### Proving nothing was removed from the end
+
+A hash chain catches an edit, a deletion from the middle, a reordering. It cannot
+catch a truncation: delete the newest records and what remains is a shorter chain
+in which every link is genuine, so it verifies. That is what a hash chain is, not
+a defect in this one, and no verifier reading only the ledger can close it.
+
+Closing it takes one fact from outside the ledger:
+
+```bash
+custody anchor                       # custody-anchor:v1:6:0cf2c799d2d5a25d...
+custody verify --expect-anchor "$ANCHOR"
+python3 verify_packet.py packet.json "$ANCHOR"
+```
+
+`Ledger(on_append=...)` hands you that line after every write so you can ship it
+somewhere automatically. Keep it anywhere the ledger's own operator cannot edit
+&mdash; a different account, your SIEM, a counterparty. Kept in the same database
+it protects nothing, and Custody does not pick the destination for you.
+
 ### SQLite or Postgres
 
 SQLite is the default and needs nothing installed. Run more than one application

@@ -18,6 +18,8 @@ import os
 import pathlib
 import sys
 
+from .chain import AnchorError, anchor_for, check_anchor
+
 from .signing import ECDSA_P256, ED25519, LocalSigner
 
 DEFAULT_DB = "custody.db"
@@ -197,6 +199,33 @@ def cmd_verify(args) -> int:
     how = (f"hash chain and {algorithm} signatures" if public
            else "hash chain only (no public key given)")
     print(f"OK  {len(records)} records verified — {how}")
+
+    current = anchor_for(records)
+    if args.expect_anchor:
+        try:
+            check_anchor(records, args.expect_anchor)
+        except AnchorError as exc:
+            print(f"\nANCHOR MISMATCH\n  {exc}")
+            return 1
+        except ValueError as exc:
+            print(f"\n{exc}")
+            return 2
+        print(f"OK  matches the anchor you supplied")
+    else:
+        print(f"\nanchor  {current}")
+        print("  A verifying chain does not prove records were not removed from the END --")
+        print("  a truncated chain always verifies. Keep this anchor somewhere this")
+        print("  system cannot edit, and pass it back with --expect-anchor.")
+    return 0
+
+
+# ------------------------------------------------------------------- anchor
+
+def cmd_anchor(args) -> int:
+    """Print the anchor to record elsewhere. The whole command is one line of
+    output on purpose -- it is meant to be piped into something."""
+    records, _, _ = _load_records(args.ledger)
+    print(anchor_for(records))
     return 0
 
 
@@ -299,8 +328,14 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("verify", help="recompute a chain and report the first break")
     p.add_argument("ledger", nargs="?", default=DEFAULT_DB, help="a .db or an exported .json")
+    p.add_argument("--expect-anchor", default=None,
+                   help="an anchor recorded earlier, elsewhere; detects truncation")
     p.add_argument("--public-key", default=None, help="hex; omit to check continuity only")
     p.set_defaults(func=cmd_verify)
+
+    p = sub.add_parser("anchor", help="print the anchor to record outside this system")
+    p.add_argument("ledger", nargs="?", default=DEFAULT_DB, help="a .db or an exported .json")
+    p.set_defaults(func=cmd_anchor)
 
     p = sub.add_parser("packet", help="export the chain of evidence for one loan")
     p.add_argument("loan")

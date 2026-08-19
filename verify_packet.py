@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Verify a Custody packet. One file, no installation, nothing to trust but this.
 
-    python3 verify_packet.py packet.json
+    python3 verify_packet.py packet.json [anchor]
 
 The rest of Custody is a library you would have to take on faith. This file is
 deliberately not that: it is short enough to read end to end in a few minutes,
@@ -114,7 +114,39 @@ def check_signature(public_hex, algorithm, signature_hex, digest_hex):
     return True
 
 
-def main(path):
+ANCHOR_PREFIX = "custody-anchor:v1"
+
+
+def check_anchor(records, token):
+    """Compare the packet against an anchor recorded outside the lender.
+
+    This is the only check here that needs something the packet cannot supply.
+    A truncated chain verifies -- every remaining link is genuine -- so proving
+    nothing was removed from the end means knowing how long it should have been,
+    and that fact has to come from somewhere the lender does not control.
+    """
+    parts = token.strip().split(":")
+    if len(parts) != 4 or f"{parts[0]}:{parts[1]}" != ANCHOR_PREFIX:
+        print(f"  not a custody anchor: {token!r}")
+        return 2
+    want_count, want_head = int(parts[2]), parts[3]
+    head = records[-1]["hash"] if records else "0" * 64
+
+    if len(records) < want_count:
+        print(f"  ANCHOR MISMATCH: this packet has {len(records)} records, the anchor")
+        print(f"    attests to {want_count}. {want_count - len(records)} of the newest are")
+        print("    missing -- a truncation, which the chain above cannot see.")
+        return 1
+    at = records[want_count - 1]["hash"] if want_count else "0" * 64
+    if at != want_head:
+        print(f"  ANCHOR MISMATCH: record {want_count} hashes to {at[:16]}... but the")
+        print(f"    anchor recorded {want_head[:16]}... — history was rewritten.")
+        return 1
+    print(f"  OK  matches the anchor supplied ({want_count} records)")
+    return 0
+
+
+def main(path, anchor=None):
     with open(path, encoding="utf-8") as fh:
         packet = json.load(fh)
 
@@ -169,9 +201,6 @@ def main(path):
         prev = record["hash"]
 
     print(f"  OK  hash chain verified across {len(records)} records")
-    print(f"      head {prev}")
-    print("      (compare this against an independently recorded head hash --")
-    print("       a chain truncated at the end still verifies)")
     if signatures_checked:
         algorithms = sorted({r.get("sig_alg", "ed25519") for r in records})
         print(f"  OK  {signatures_checked} signatures verified ({', '.join(algorithms)})")
@@ -181,16 +210,26 @@ def main(path):
     elif not public_hex:
         print("  --  signatures NOT checked: no public key in this packet.")
 
+    anchor_status = 0
+    if anchor:
+        anchor_status = check_anchor(records, anchor)
+    else:
+        print(f"  --  completeness NOT checked. Anchor for this packet:")
+        print(f"      {ANCHOR_PREFIX}:{len(records)}:{prev}")
+        print("      A verifying chain does not prove records were not removed from")
+        print("      the END; a truncated chain verifies too. Pass an anchor recorded")
+        print("      earlier, elsewhere, as the second argument to check that.")
+
     print()
     print("  This proves the records have not been altered since they were written.")
     print("  It does not prove they are true, and it cannot show a decision that was")
     print("  never recorded in the first place.")
-    return 0
+    return anchor_status
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
+    if len(sys.argv) not in (2, 3):
         print(__doc__.strip().split("\n\n")[0])
-        print("\nusage: python3 verify_packet.py <packet.json>")
+        print("\nusage: python3 verify_packet.py <packet.json> [anchor]")
         raise SystemExit(2)
-    raise SystemExit(main(sys.argv[1]))
+    raise SystemExit(main(sys.argv[1], sys.argv[2] if len(sys.argv) == 3 else None))

@@ -25,7 +25,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey 
 
 from custody.chain import GENESIS, verify_chain  # noqa: E402
 from custody.ledger import Ledger  # noqa: E402
-from custody.signing import load_public_key  # noqa: E402
+from custody.signing import ED25519, LocalSigner, load_public_key  # noqa: E402
 from custody.store import ChainForked, PostgresStore, Store, open_store  # noqa: E402
 
 DSN = os.environ.get("CUSTODY_TEST_DSN")
@@ -206,6 +206,80 @@ def test_postgres_backend():
     assert _run("postgres", _postgres) == 0
 
 
+def test_a_pre_0_5_0_ledger_gains_the_unique_constraint_on_open() -> None:
+    """Older ledgers kept the weaker schema, because CREATE TABLE IF NOT EXISTS
+    is a no-op on a table that exists. Found by audit, not by a user."""
+    import sqlite3
+
+    from custody.chain import verify_chain
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = str(pathlib.Path(tmp) / "legacy.db")
+        sqlite3.connect(path).executescript("""
+            CREATE TABLE records(
+              seq INTEGER PRIMARY KEY AUTOINCREMENT, record_id TEXT NOT NULL UNIQUE,
+              loan TEXT NOT NULL, ts TEXT NOT NULL, model TEXT, principal TEXT NOT NULL,
+              body TEXT NOT NULL, prev_hash TEXT NOT NULL, hash TEXT NOT NULL UNIQUE,
+              signature TEXT NOT NULL);""")
+
+        store = Store(path)
+        assert store.migrated, "an old ledger was opened without being migrated"
+        assert store._prev_hash_is_unique()
+
+        led = _ledger(store)
+        for i in range(3):
+            _write(led, i)
+        records = store.all()
+        verify_chain(records)
+        store.close()
+
+        # reopening must not migrate again, and must not disturb the records
+        again = Store(path)
+        assert not again.migrated, "a migrated ledger was migrated a second time"
+        assert again.all() == records, "reopening changed the records"
+        again.close()
+
+
+def test_migration_refuses_a_ledger_that_already_forked() -> None:
+    """The constraint cannot be applied without discarding one of the two
+    records. Dropping evidence to satisfy a schema is the one thing this
+    library must never do quietly."""
+    import json
+    import sqlite3
+
+    from custody.chain import seal
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = str(pathlib.Path(tmp) / "forked.db")
+        sqlite3.connect(path).executescript("""
+            CREATE TABLE records(
+              seq INTEGER PRIMARY KEY AUTOINCREMENT, record_id TEXT NOT NULL UNIQUE,
+              loan TEXT NOT NULL, ts TEXT NOT NULL, model TEXT, principal TEXT NOT NULL,
+              body TEXT NOT NULL, prev_hash TEXT NOT NULL, hash TEXT NOT NULL UNIQUE,
+              signature TEXT NOT NULL);""")
+
+        signer = LocalSigner(Ed25519PrivateKey.generate(), ED25519)
+        base = {"loan": "L", "timestamp": "t", "principal": "p", "model": "m"}
+        pair = [seal(dict(base, record_id=r), GENESIS, signer) for r in ("a", "b")]
+
+        db = sqlite3.connect(path)
+        for rec in pair:
+            db.execute("INSERT INTO records (record_id,loan,ts,model,principal,body,"
+                       "prev_hash,hash,signature) VALUES (?,?,?,?,?,?,?,?,?)",
+                       (rec["record_id"], rec["loan"], rec["timestamp"], rec["model"],
+                        rec["principal"], json.dumps(rec, sort_keys=True),
+                        rec["prev_hash"], rec["hash"], rec["signature"]))
+        db.commit()
+        db.close()
+
+        try:
+            Store(path)
+        except ChainForked as exc:
+            assert "fork" in str(exc)
+        else:
+            raise AssertionError("a forked ledger was migrated anyway")
+
+
 def test_open_store_routes_on_the_url():
     with tempfile.TemporaryDirectory() as tmp:
         store = open_store(pathlib.Path(tmp) / "l.db")
@@ -230,11 +304,14 @@ if __name__ == "__main__":
         failures += _run("postgres", _postgres)
     else:
         print("\nSKIP [postgres] CUSTODY_TEST_DSN is not set -- Postgres was NOT tested")
-    try:
-        test_open_store_routes_on_the_url()
-        print("PASS [both]   open_store routes on the url")
-    except AssertionError as exc:
-        failures += 1
-        print(f"FAIL [both]   open_store routes on the url: {exc}")
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and name not in ("test_sqlite_backend",
+                                                     "test_postgres_backend"):
+            try:
+                fn()
+                print(f"PASS [both]   {name}")
+            except Exception as exc:
+                failures += 1
+                print(f"FAIL [both]   {name}: {exc}")
     print(f"\n{failures} failure(s)")
     raise SystemExit(1 if failures else 0)
