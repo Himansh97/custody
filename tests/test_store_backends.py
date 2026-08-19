@@ -44,7 +44,7 @@ def _postgres():
     # Each test starts from an empty ledger. TRUNCATE rather than DELETE
     # precisely because the append-only trigger is row-level and would abort a
     # DELETE -- which is the point of the trigger, and is asserted below.
-    with store._db.cursor() as cur:
+    with store._pool.connection() as conn, conn.cursor() as cur:
         cur.execute("TRUNCATE records RESTART IDENTITY")
     return store
 
@@ -171,7 +171,7 @@ def _cursor(store):
 
     @contextlib.contextmanager
     def pg_cursor():
-        with store._db.cursor() as cur:
+        with store._pool.connection() as conn, conn.cursor() as cur:
             yield cur, "%s"
 
     return (pg_cursor if isinstance(store, PostgresStore) else sqlite_cursor)()

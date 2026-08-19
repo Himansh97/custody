@@ -255,13 +255,23 @@ class PostgresStore(_BaseStore):
     constraint on `prev_hash` is what makes a fork impossible, and a caller who
     loses a race gets `ChainForked` and retries rather than writing a ledger that
     will not verify.
+
+    **A pool, not a connection.** One connection cannot carry two transactions,
+    so sharing it across threads makes the advisory lock meaningless -- the
+    threads serialise on the connection instead of on the lock, and psycopg
+    raises OutOfOrderTransactionNesting when their transactions interleave. CI
+    found this by losing 19 of 20 concurrent writes. Each writer now takes its
+    own connection, which is also what `custody serve` needs: it is a threading
+    HTTP server, and a request handler must not wait on another request's
+    transaction.
     """
 
     placeholder = "%s"
 
-    def __init__(self, dsn: str, *, autocommit: bool = True):
+    def __init__(self, dsn: str, *, min_size: int = 1, max_size: int = 16):
         try:
             import psycopg
+            from psycopg_pool import ConnectionPool
         except ImportError:  # pragma: no cover - depends on the install extra
             raise RuntimeError(
                 "Postgres support needs psycopg -- pip install custody-ledger[postgres]"
@@ -269,17 +279,21 @@ class PostgresStore(_BaseStore):
 
         self._psycopg = psycopg
         self.dsn = dsn
-        self._db = psycopg.connect(dsn, autocommit=autocommit)
-        with self._db.cursor() as cur:
+        self._pool = ConnectionPool(dsn, min_size=min_size, max_size=max_size,
+                                    open=True, timeout=30)
+        self._pool.wait(timeout=30)
+        with self._pool.connection() as conn, conn.cursor() as cur:
             cur.execute(_PG_SCHEMA)
             for guard in _PG_GUARDS:
                 cur.execute(guard)
 
     def append_chained(self, record: dict[str, Any],
                        seal: Callable[[dict[str, Any], str], dict[str, Any]]) -> dict[str, Any]:
-        # One transaction: take the advisory lock, read the head, insert. The
-        # lock is released when the transaction ends, whatever happens to it.
-        with self._db.transaction(), self._db.cursor() as cur:
+        # One connection, one transaction: take the advisory lock, read the
+        # head, insert. Other writers block on the lock rather than on this
+        # connection, and the lock is released when the transaction ends --
+        # including when it ends badly.
+        with self._pool.connection() as conn, conn.cursor() as cur:
             cur.execute("SELECT pg_advisory_xact_lock(%s)", (_ADVISORY_LOCK_KEY,))
             cur.execute("SELECT hash FROM records ORDER BY seq DESC LIMIT 1")
             row = cur.fetchone()
@@ -293,11 +307,11 @@ class PostgresStore(_BaseStore):
             return sealed
 
     def append(self, record: dict[str, Any]) -> None:
-        with self._db.cursor() as cur:
+        with self._pool.connection() as conn, conn.cursor() as cur:
             cur.execute(self._insert_sql, self._row(record))
 
     def head_hash(self) -> str:
-        with self._db.cursor() as cur:
+        with self._pool.connection() as conn, conn.cursor() as cur:
             cur.execute("SELECT hash FROM records ORDER BY seq DESC LIMIT 1")
             row = cur.fetchone()
             return row[0] if row else GENESIS
@@ -313,17 +327,17 @@ class PostgresStore(_BaseStore):
         return self._rows(f"SELECT body FROM records{where} ORDER BY seq", tuple(args))
 
     def loans(self) -> list[str]:
-        with self._db.cursor() as cur:
+        with self._pool.connection() as conn, conn.cursor() as cur:
             cur.execute("SELECT DISTINCT loan FROM records ORDER BY loan")
             return [r[0] for r in cur.fetchall()]
 
     def _rows(self, sql: str, args: tuple = ()) -> list[dict[str, Any]]:
-        with self._db.cursor() as cur:
+        with self._pool.connection() as conn, conn.cursor() as cur:
             cur.execute(sql, args)
             return [json.loads(r[0]) for r in cur.fetchall()]
 
     def close(self) -> None:
-        self._db.close()
+        self._pool.close()
 
 
 # ------------------------------------------------------------------- factory
