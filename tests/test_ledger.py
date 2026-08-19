@@ -252,6 +252,58 @@ def test_borrower_pii_never_reaches_the_stored_record() -> None:
     assert "1000254" in prompt, "the loan number is the query key and must survive"
 
 
+def test_pii_in_free_text_notes_is_redacted_too() -> None:
+    """Found by audit: `note` was the one field that skipped redaction.
+
+    It is also the field most likely to contain PII, because it is the only one
+    a human types prose into. Three routes reach it -- a note passed to
+    route_to_human, a reviewer's note on a human_review, and an exception
+    message on the error path -- and all three were writing raw text into a
+    record the whole design says an examiner may read.
+    """
+    import json
+
+    led = _ledger()
+    with led.decision(loan="1000254", principal="jane@lender.com", purpose="income",
+                      identifiers=["Dana Whitfield"]) as d:
+        out = d.call(model="m", prompt="p", sources=[PAYSTUB], response={"gross_pay": 4206.00})
+        d.gate(out, citations={"gross_pay": "paystub"}, confidence=0.40)
+        d.route_to_human(queue="uw-review",
+                         note="Dana Whitfield called from 214-555-0182 about SSN 123-45-6789")
+    decision_id = led.records()[0]["record_id"]
+
+    led.human_review(loan="1000254", reviewer="sam@lender.com", decision_id=decision_id,
+                     action="corrected", outcome={"monthly_income": 8200.83},
+                     note="Spoke to Dana Whitfield, DOB 03/14/1987, confirmed the W-2.",
+                     identifiers=["Dana Whitfield"])
+
+    blob = json.dumps(led.records())
+    for secret in ("Dana Whitfield", "214-555-0182", "123-45-6789", "03/14/1987"):
+        assert secret not in blob, f"{secret!r} survived into the ledger via a note"
+    assert "1000254" in blob, "the loan number must still survive"
+
+
+def test_an_exception_message_carrying_pii_is_redacted() -> None:
+    """The error path builds `note` from the exception text, which nobody writes
+    with an audit record in mind."""
+    import json
+
+    led = _ledger()
+    try:
+        with led.decision(loan="1000254", principal="jane@lender.com", purpose="income",
+                          identifiers=["Dana Whitfield"]) as d:
+            d.call(model="m", prompt="p", sources=[PAYSTUB], response={"gross_pay": 1.0})
+            raise ValueError("no record for Dana Whitfield / SSN 123-45-6789")
+    except ValueError:
+        pass
+
+    record = led.records()[0]
+    assert record["disposition"] == "errored"
+    blob = json.dumps(record)
+    assert "Dana Whitfield" not in blob and "123-45-6789" not in blob, \
+        f"an exception message leaked PII: {record['note']!r}"
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

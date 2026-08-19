@@ -31,7 +31,7 @@ This is the control Custody exists to satisfy, and it satisfies it unusually wel
 | Requirement | How |
 |---|---|
 | Logs protected from **modification** | Database triggers abort any `UPDATE` — on SQLite and on Postgres alike, so the control does not weaken when you move off a single file. Beyond that, each record's hash covers the previous one, so an edit made by any route — a SQL client, a file editor, restoring an altered backup — is detectable by anyone holding the records. |
-| Logs protected from **deletion** | Triggers abort `DELETE`; a removed record leaves a gap the chain names. On Postgres, `REVOKE UPDATE, DELETE ON records FROM <app_role>` is the stronger control and the trigger is then a backstop rather than the only defence. |
+| Logs protected from **deletion** | Triggers abort `DELETE`; a record removed from the *middle* leaves a gap the chain names. Records removed from the *end* do not &mdash; see gap 6. On Postgres, `REVOKE UPDATE, DELETE ON records FROM <app_role>` is the stronger control and the trigger is then a backstop rather than the only defence. |
 | Logs **monitored and reviewed** for unauthorised modification | `custody verify` recomputes the whole chain and reports the first broken record by id. Run it on a schedule and you have continuous detection rather than periodic hope. |
 | **Independent** security assessment | `verify_packet.py` is one file, no dependency on this package, nothing outside the standard library. Your assessor verifies the evidence themselves rather than accepting our tooling's word. |
 | Log **retention periods** | **Not addressed — see gaps.** |
@@ -114,6 +114,17 @@ substituted backup is detectable rather than merely suspected.
 5. **No independent assessment yet.** Nobody outside this project has reviewed
    the cryptography. `verify_packet.py` exists so that is cheap to fix, and until
    somebody does it, treat the design as unreviewed.
+6. **Truncation of the newest records is not detectable from the ledger alone.**
+   A hash chain proves each record follows the one before it. Delete the last
+   three records and the remaining chain is still internally consistent: there is
+   no gap, and verification passes. Editing or removing a record in the middle is
+   caught; removing the tail is not. This is a property of hash chains, not a bug
+   in this implementation, and no verifier reading only the ledger can close it.
+   Closing it needs an anchor outside the ledger &mdash; the head hash and record
+   count written somewhere the same person cannot edit (a second system, an
+   append-only log service, a witness who countersigns), and compared on read.
+   Custody does not ship that today, and until it does, a ledger is evidence
+   against alteration but not against a well-timed truncation.
 
 ## What this is not
 

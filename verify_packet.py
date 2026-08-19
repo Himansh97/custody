@@ -32,6 +32,14 @@ WHAT IT DOES NOT PROVE
   consistent; a decision that was never recorded at all leaves no gap to find.
   This is why the capture is structural in the library rather than a call
   somebody remembers to make, but no verifier can see what was never there.
+
+  That the chain is *complete at the end*. Removing a record from the middle
+  breaks the link and is reported below. Removing the most recent records
+  breaks nothing -- what remains is a shorter chain that verifies perfectly.
+  Detecting that requires knowing what the head should have been, which is
+  information this file does not have and cannot derive. If completeness
+  matters to you, compare the final hash printed below against a head hash
+  recorded somewhere the ledger's owner does not control.
 """
 import hashlib
 import json
@@ -161,6 +169,9 @@ def main(path):
         prev = record["hash"]
 
     print(f"  OK  hash chain verified across {len(records)} records")
+    print(f"      head {prev}")
+    print("      (compare this against an independently recorded head hash --")
+    print("       a chain truncated at the end still verifies)")
     if signatures_checked:
         algorithms = sorted({r.get("sig_alg", "ed25519") for r in records})
         print(f"  OK  {signatures_checked} signatures verified ({', '.join(algorithms)})")

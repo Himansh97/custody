@@ -186,7 +186,13 @@ class Decision:
             # --- why, and what happened next ---
             "findings": self.verdict.as_dict()["findings"] if self.verdict else [],
             "disposition": self.disposition,
-            "note": self.note,
+            # Redacted like everything else. `note` carries free text a caller
+            # passed to route_to_human(), and on the error path it is an
+            # exception message -- which is exactly where a borrower's details
+            # turn up unplanned, in the one field nobody thought to sanitise.
+            "note": redact_value(
+                self.note, loan=self.loan, identifiers=self.identifiers
+            ),
             "sources_seen": len(self.sources),
             "completed_at": _now(),
         }
@@ -284,7 +290,10 @@ class Ledger:
                 "timestamp": _now(),
                 "reviews": decision_id,
                 "action": action,
-                "note": note,
+                # A reviewer types prose here -- "spoke to the borrower, see
+                # the number on file". Free text from a human is the most
+                # likely place for PII in the whole record.
+                "note": redact_value(note, loan=loan, identifiers=identifiers),
                 "findings": [],
                 "disposition": f"human_{action}",
             }
