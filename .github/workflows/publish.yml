@@ -1,0 +1,97 @@
+name: publish
+
+# Publishing happens on a version tag, and only after the tests pass.
+#
+# There is no API token anywhere in this workflow or in the repository secrets.
+# PyPI Trusted Publishing exchanges GitHub's OIDC identity for a short-lived
+# upload token at the moment of publish, so there is no long-lived credential to
+# leak, rotate, or find in a repo three years from now. For a project whose
+# subject is evidence integrity, a stored publishing secret would be a poor look.
+#
+# One-time setup on PyPI (Your projects -> Publishing -> Add a pending publisher):
+#     PyPI project name  custody-ledger
+#     Owner              Himansh97
+#     Repository name    custody
+#     Workflow name      publish.yml
+#     Environment name   pypi
+#
+# Then:  git tag v0.2.0 && git push origin v0.2.0
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # Publishing an artifact nobody ran is how a broken release reaches people
+    # who trusted the version number. The whole suite gates the upload.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Run the suite
+        run: |
+          set -e
+          for t in tests/test_*.py; do
+            echo "--- $t"
+            python "$t"
+          done
+      - name: Verify the demo ledger the way a browser would
+        run: |
+          python demo/pipeline.py
+          node tests/verify_like_the_page.js demo/ledger.json
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          twine check dist/*
+      - name: Install the built wheel and exercise the CLI
+        # The wheel is what users get, so the wheel is what gets tested -- not
+        # the source tree it came from. This is the step that caught page.html
+        # missing from the package and serve dying on a second thread.
+        run: |
+          python -m venv /tmp/check
+          /tmp/check/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/check/bin/custody keygen --out k.key
+          printf 'Wages 98,410.00\n' > w2.txt
+          printf '{"fields":{"wages":98410.0},"confidence":0.95,"citations":{"wages":"w2"}}\n' > r.json
+          /tmp/check/bin/custody run --loan 1 --principal ci@example.com \
+            --instruction "Extract wages." --doc w2.txt --replay r.json --key k.key
+          /tmp/check/bin/custody verify custody.db
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write        # the only credential involved; nothing is stored
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
