@@ -215,7 +215,8 @@ def cmd_packet(args) -> int:
 
 def cmd_serve(args) -> int:
     from .server import serve
-    serve(db=args.db, key_path=args.key, host=args.host, port=args.port)
+    serve(db=args.db, key_path=args.key, host=args.host, port=args.port,
+          token=args.token, no_token=args.no_token)
     return 0
 
 
@@ -292,6 +293,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--key", default=None)
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8787)
+    p.add_argument("--token", default=None,
+                   help="shared secret; one is generated for you on loopback")
+    p.add_argument("--no-token", action="store_true",
+                   help="serve with no authentication at all -- have a reason")
     p.set_defaults(func=cmd_serve)
 
     p = sub.add_parser("demo", help="run the synthetic loan pipeline")

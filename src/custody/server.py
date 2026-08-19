@@ -1,10 +1,18 @@
 """`custody serve` — the same review page, backed by a live ledger.
 
-Stdlib only, and bound to localhost by default. This is a tool for looking at
-your own ledger on your own machine, not a service: it has no authentication,
-and a component holding an audit trail should not be quietly reachable by
-anything that can route to it. Binding elsewhere requires saying so explicitly,
-and says so back.
+Stdlib only. What this serves is an audit trail containing loan numbers and
+derived financial data, so it is bound to localhost by default and refuses
+outright to bind anywhere else without a token. Fannie Mae's Information
+Security and Business Resiliency Supplement §3.1 requires access to Confidential
+Information be limited to authorised users on a need-to-know basis; a port
+anybody on the network can read is not that.
+
+The token is a floor, not a control. It is one shared secret with no identity
+behind it, which satisfies nothing the Supplement says about unique user IDs,
+MFA or least privilege. A real deployment puts this behind the same SSO the rest
+of the estate uses and does not expose it directly at all. The banner says so
+every time it starts, because a tool that lets you do the wrong thing quietly is
+how the wrong thing ends up in production.
 
 The page it renders is the same file the public demo is baked from, so what a
 lender clicks on the website and what they get after installing are the same
@@ -12,9 +20,12 @@ product.
 """
 from __future__ import annotations
 
+import hmac
 import json
+import os
+import secrets
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from .examiner import chain_status, packet
 from .ledger import Ledger
@@ -35,7 +46,7 @@ def _bundle(ledger: Ledger) -> dict:
     }
 
 
-def _handler(ledger: Ledger):
+def _handler(ledger: Ledger, token: str | None):
     class Handler(BaseHTTPRequestHandler):
         server_version = "custody"
 
@@ -54,8 +65,33 @@ def _handler(ledger: Ledger):
             self._send(code, json.dumps(payload, indent=1, default=str).encode(),
                        "application/json; charset=utf-8")
 
+        def _authorised(self, query: dict) -> bool:
+            if token is None:
+                return True
+            supplied = ""
+            header = self.headers.get("Authorization", "")
+            if header.startswith("Bearer "):
+                supplied = header[7:]
+            elif "token" in query:
+                # Accepted so a link can be shared with a colleague, at the cost
+                # of the token landing in browser history and any proxy log. It
+                # is the weaker path and is documented as such.
+                supplied = query["token"][0]
+            # Constant-time: a plain == leaks the token one character at a time
+            # to anyone willing to measure.
+            return hmac.compare_digest(supplied, token)
+
         def do_GET(self) -> None:  # noqa: N802 - stdlib naming
-            path = urlparse(self.path).path
+            parsed = urlparse(self.path)
+            path = parsed.path
+            query = parse_qs(parsed.query)
+
+            if not self._authorised(query):
+                self.send_response(401)
+                self.send_header("WWW-Authenticate", 'Bearer realm="custody"')
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
 
             if path in ("/", "/index.html"):
                 # Rendered per request rather than cached: a ledger that gained
@@ -92,8 +128,29 @@ def _handler(ledger: Ledger):
     return Handler
 
 
-def serve(*, db: str, key_path: str | None, host: str = "127.0.0.1", port: int = 8787) -> None:
+LOCAL = ("127.0.0.1", "localhost", "::1")
+
+
+def serve(*, db: str, key_path: str | None, host: str = "127.0.0.1", port: int = 8787,
+          token: str | None = None, no_token: bool = False) -> None:
     from .cli import load_signer
+
+    token = token or os.environ.get("CUSTODY_TOKEN")
+
+    if host not in LOCAL and not token and not no_token:
+        # Refusing is the whole point. Warning and starting anyway is how an
+        # unauthenticated audit trail ends up on a network, and the person who
+        # did it will remember a warning they scrolled past, not a decision.
+        raise SystemExit(
+            f"refusing to bind {host} with no token.\n"
+            "  This serves an audit trail containing loan numbers and financial data.\n"
+            "  Set CUSTODY_TOKEN, pass --token, or bind 127.0.0.1.\n"
+            "  --no-token overrides this, and you should have a reason."
+        )
+    if host in LOCAL and token is None and not no_token:
+        # A token even on loopback, because anything else running on this host
+        # can reach it -- including a browser tab on a page you did not write.
+        token = secrets.token_urlsafe(24)
 
     signer = load_signer(key_path)
     ledger = Ledger(policy="-", signer=signer, path=db)
@@ -102,12 +159,18 @@ def serve(*, db: str, key_path: str | None, host: str = "127.0.0.1", port: int =
 
     print(f"custody  {db}  {len(records)} records  signed with {signer.algorithm}")
     print(f"         chain: {'verified' if status['verified'] else status}")
-    if host not in ("127.0.0.1", "localhost", "::1"):
-        print(f"         WARNING: bound to {host} with no authentication — this exposes")
-        print( "         an audit trail to anything that can reach this port.")
-    print(f"         http://{host}:{port}/   (ctrl-c to stop)")
+    if token:
+        print(f"         http://{host}:{port}/?token={token}")
+    else:
+        print(f"         http://{host}:{port}/   (NO TOKEN -- anyone who can reach this port)")
+    if host not in LOCAL:
+        print()
+        print("         This is bound beyond loopback. A shared token is a floor, not a")
+        print("         control: no identity, no MFA, no least privilege. Put it behind")
+        print("         your SSO before anyone but you uses it.")
+    print("         ctrl-c to stop")
 
-    httpd = ThreadingHTTPServer((host, port), _handler(ledger))
+    httpd = ThreadingHTTPServer((host, port), _handler(ledger, token))
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

@@ -144,8 +144,13 @@ custody run --loan 1000254 --principal you@lender.com \
 
 custody verify custody.db --public-key <hex>   # recompute the chain
 custody packet 1000254 --out packet.json       # evidence for one loan
-custody serve                                  # browse it at localhost:8787
+custody serve                                  # prints a URL with a one-time token
 ```
+
+`custody serve` binds loopback and mints a token unless you supply one, and
+refuses outright to bind anywhere else without one &mdash; it is serving an audit
+trail containing loan numbers. A shared token is a floor, not a control; put it
+behind your SSO before anyone but you uses it.
 
 `custody run` calls a real model when `ANTHROPIC_API_KEY` is set
 (`pip install "custody-ledger[anthropic] @ git+https://github.com/Himansh97/custody"`), or replays a fixed response with
@@ -181,7 +186,13 @@ letter specifies, it is a separate product, and vendors already occupy it. It wr
 inventory models it never sees.
 
 `docs/ll-2026-04.md` sets out what the letter actually says, what Custody helps
-with, and the five obligations it does not touch at all.
+with, and the obligations it does not touch at all.
+
+`docs/information-security.md` does the same against Fannie Mae's Information
+Security and Business Resiliency Supplement, control by control. It says no five
+times &mdash; encryption at rest, encryption in transit, real access management, log
+retention, and independent review of the cryptography. A buyer should start from
+that page rather than from a questionnaire.
 
 ## Data
 
