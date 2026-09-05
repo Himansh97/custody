@@ -36,6 +36,35 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
 
 _TOKEN = "\x00CUSTODY_LOAN\x00"
 
+# The subset of data classes that can be *found* rather than merely declared.
+# A policy naming one of these is enforceable against the documents themselves;
+# a policy naming "income" is not, because income has no shape. Keeping the two
+# apart is the whole point -- claiming detection you do not have is worse than
+# admitting a class is declared on trust.
+DETECTORS: dict[str, re.Pattern[str]] = {
+    "ssn": _PATTERNS[0][1],
+    "email": _PATTERNS[1][1],
+    "phone": _PATTERNS[2][1],
+    "dob": _PATTERNS[3][1],
+    "account": _PATTERNS[4][1],
+}
+
+# The names a policy author is likely to write for the same thing.
+ALIASES = {
+    "social_security_number": "ssn",
+    "date_of_birth": "dob",
+    "bank_account_number": "account",
+    "account_number": "account",
+    "email_address": "email",
+    "phone_number": "phone",
+}
+
+
+def detector_for(data_class: str):
+    """The pattern that finds this class, or None if it can only be declared."""
+    name = (data_class or "").strip().lower()
+    return DETECTORS.get(ALIASES.get(name, name))
+
 
 def redact(text: str, *, loan: str, identifiers: Iterable[str] = ()) -> str:
     """Return `text` with borrower PII removed and the loan number preserved.

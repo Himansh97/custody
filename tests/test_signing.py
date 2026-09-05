@@ -107,15 +107,46 @@ def test_a_raw_private_key_still_works() -> None:
     assert led.algorithm == ED25519
 
 
-def test_a_ledger_without_any_key_refuses_to_start() -> None:
-    """Inventing one would sign every run with a different identity, which is a
-    signature that ties to nothing."""
+def test_a_ledger_without_a_key_cannot_write() -> None:
+    """A keyless ledger opens for reading and refuses to append.
+
+    Signing every run with an invented key would tie the signature to nothing,
+    and writing an unsigned record would break the chain for every reader. But
+    *reading* needs no signing key at all -- demanding one would mean whoever
+    compiles evidence for an examiner must also be able to write records, which
+    is the separation of duties this library argues for everywhere else.
+    """
+    ledger = Ledger(policy="p")
+    assert ledger.read_only
+    assert ledger.records() == []
+
     try:
-        Ledger(policy="p")
+        with ledger.decision(loan="1", principal="j@l", purpose="x") as d:
+            d.call(model="m", prompt="p", response={})
     except ValueError as exc:
-        assert "signer" in str(exc)
+        assert "read-only" in str(exc)
     else:
-        raise AssertionError("a Ledger started with no signing identity")
+        raise AssertionError("a keyless ledger wrote a record")
+
+
+def test_a_read_only_ledger_checks_signatures_when_given_a_public_key() -> None:
+    """Chain continuity needs no key; signatures need the public one, not the private."""
+    signer = LocalSigner(algorithm=ED25519)
+    written = Ledger(policy="p", signer=signer)
+    with written.decision(loan="1", principal="j@l", purpose="x") as d:
+        out = d.call(model="m", prompt="p", sources=["gross 4,206.00"],
+                     response={"gross": 4206.00})
+        d.gate(out, citations={"gross": "paystub"}, confidence=0.99)
+        d.commit(outcome=out)
+
+    reader = Ledger(policy="p", store=written.store)
+    assert reader.public_key is None, "a reader invented a key it was not given"
+    verify_chain(reader.records(), reader.public_key)          # continuity only
+
+    reader.with_public_key(signer.public_key_bytes().hex())
+    assert reader.public_key is not None
+    verify_chain(reader.records(), reader.public_key)          # and signatures
+    assert reader.algorithm == ED25519
 
 
 def test_keys_round_trip_through_hex_on_both_algorithms() -> None:

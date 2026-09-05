@@ -62,6 +62,9 @@
 
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
+body.embed{padding-top:0}
+body.embed .top,
+body.embed footer{display:none}
 body{
   margin:0;background:var(--paper);color:var(--ink);
   font-family:var(--display);font-size:16px;line-height:1.55;
@@ -145,6 +148,58 @@ h2{
   display:block;font-family:var(--mono);font-size:11px;color:var(--ink-faint);
   margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
+/* ---- loan selector: only rendered when a ledger holds more than one ---- */
+.loans{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin:0 0 16px}
+.loans-label{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink-faint);
+}
+.loan-pills{display:flex;flex-wrap:wrap;gap:6px}
+.loan-pill{
+  font-family:var(--mono);font-size:12px;padding:5px 11px;border-radius:2px;
+  border:1px solid var(--rule);background:var(--paper);color:var(--ink-soft);
+  cursor:pointer;
+}
+.loan-pill[aria-selected="true"]{
+  background:var(--ink);color:var(--paper);border-color:var(--ink);
+}
+.loan-pill:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+/* ---- disclosure ---- */
+.disclose{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--rule);
+  border:1px solid var(--rule);border-radius:3px;margin:22px 0 34px}
+.disclose-col{background:var(--paper);padding:18px 20px 20px}
+@media (max-width:680px){.disclose{grid-template-columns:1fr}}
+.dh{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink-faint);margin:0 0 12px;font-weight:500;
+}
+.dh-wide{margin-top:8px}
+.drow{display:flex;flex-wrap:wrap;gap:2px 10px;padding:7px 0;border-top:1px solid var(--rule-soft)}
+.drow:first-of-type{border-top:0;padding-top:0}
+.drow b{font-size:13.5px;font-weight:600}
+.drow span{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);
+  width:100%;word-break:break-all}
+.drow em{font-style:normal;font-family:var(--mono);font-size:11.5px;color:var(--ink-soft)}
+
+.table-wrap{overflow-x:auto;border:1px solid var(--rule);border-radius:3px;margin:0 0 18px}
+table.usage{border-collapse:collapse;width:100%;font-size:13.5px;min-width:560px}
+table.usage th,table.usage td{
+  text-align:left;padding:10px 14px;border-bottom:1px solid var(--rule-soft);
+  white-space:nowrap;
+}
+table.usage th{
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-faint);background:var(--panel);font-weight:500;
+}
+table.usage td.p{white-space:normal;font-weight:600}
+table.usage td.n{font-family:var(--mono);font-variant-numeric:tabular-nums}
+table.usage tr:last-child td{border-bottom:0}
+table.usage .z{color:var(--ink-faint)}
+table.usage .g{color:var(--green)}
+table.usage .a{color:var(--amber)}
+table.usage .r{color:var(--red)}
+
 .badge{
   font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
   padding:4px 8px;border-radius:2px;text-align:center;white-space:nowrap;
@@ -153,6 +208,10 @@ h2{
 .b-reject{background:var(--red-wash);color:var(--red)}
 .b-review{background:var(--amber-wash);color:var(--amber)}
 .b-human{background:var(--panel);color:var(--ink-soft);border:1px solid var(--rule)}
+/* A refusal is not a failed output. It is the one badge on this page for a
+   record where no model was called at all, so it does not borrow the gate's
+   colours. */
+.b-denied{background:var(--ink-soft);color:var(--paper)}
 .rec .hash{
   font-family:var(--mono);font-size:11px;color:var(--ink-faint);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
@@ -184,6 +243,7 @@ h2{
 }
 .findings{padding:14px 18px;border-top:1px solid var(--rule);background:var(--red-wash)}
 .findings.review{background:var(--amber-wash)}
+.findings.denied{background:var(--panel)}
 .findings p{margin:0;font-size:13.5px;line-height:1.55}
 .findings p+p{margin-top:8px}
 .findings code{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
@@ -220,6 +280,11 @@ footer a{color:inherit}
 </style>
 
 <div class="wrap">
+<!-- Embedded with ?embed=1, this page drops its own masthead and footer and
+     reports its height to the host, so a case-study page can show the real
+     artifact in an iframe instead of keeping a second copy of it. A forked
+     copy is how the published demo and the shipped library drift apart, which
+     is the one divergence this project cannot afford. -->
 
 <header class="top">
   <p class="eyebrow">Custody</p>
@@ -274,6 +339,11 @@ footer a{color:inherit}
     </div>
   </div>
 
+  <div class="loans" id="loans" hidden>
+    <span class="loans-label">Loan</span>
+    <div class="loan-pills" id="loanPills" role="tablist" aria-label="Loans in this ledger"></div>
+  </div>
+
   <div class="chain" id="chain" role="listbox" aria-label="Ledger records"></div>
 
   <div class="detail" id="detail" hidden>
@@ -286,6 +356,34 @@ footer a{color:inherit}
   </div>
 
   <p class="note" id="tamperNote" hidden></p>
+</section>
+
+<section>
+  <h2>What Fannie Mae is told</h2>
+  <p class="sub">
+    The disclosure clause is not about one loan. It asks what types of AI/ML are in
+    use, for what purpose and in what manner, and what safeguards are implemented
+    &mdash; of the whole business, on request. This is assembled from the records
+    above rather than from a register somebody maintains.
+  </p>
+
+  <div class="disclose">
+    <div class="disclose-col">
+      <h3 class="dh">Types of AI/ML in use</h3>
+      <div id="dModels"></div>
+    </div>
+    <div class="disclose-col">
+      <h3 class="dh">Safeguards implemented</h3>
+      <div id="dSafeguards"></div>
+    </div>
+  </div>
+
+  <h3 class="dh dh-wide">Purpose and manner of use</h3>
+  <div class="table-wrap">
+    <table class="usage" id="dPurposes"></table>
+  </div>
+
+  <p class="note" id="discloseLimits"></p>
 </section>
 
 <section>
@@ -329,7 +427,8 @@ footer a{color:inherit}
 "use strict";
 
 var BUNDLE = JSON.parse(document.getElementById("ledger-data").textContent);
-var LOAN = Object.keys(BUNDLE.packets)[0];
+var LOANS = Object.keys(BUNDLE.packets);
+var LOAN = LOANS[0];
 
 /* The eight fields Custody records on every AI decision. These are this
    library's design, not a schema LL-2026-04 dictates -- the letter requires
@@ -399,6 +498,11 @@ var records = BUNDLE.records.map(function(r){ return JSON.parse(JSON.stringify(r
 var pristine = JSON.stringify(BUNDLE.records);
 var selected = 0;
 var brokenAt = null;
+/* null shows the whole ledger; a loan number shows one file. The chain is
+   verified across every record either way -- a per-loan slice has gaps in it by
+   construction, and verifying the slice alone would report an honest ledger as
+   broken. */
+var loanFilter = null;
 
 var $ = function(id){ return document.getElementById(id); };
 
@@ -407,6 +511,7 @@ function verdictBadge(r){
   var t = r.response_treatment;
   if (t === "pass")   return ["b-pass", "pass"];
   if (t === "reject") return ["b-reject", "reject"];
+  if (t === "denied") return ["b-denied", "denied"];
   return ["b-review", "review"];
 }
 
@@ -414,13 +519,51 @@ function title(r){
   if (r.event === "human_review"){
     return (r.action === "corrected" ? "Human correction" : "Human approval");
   }
+  if (r.event === "ai_denied"){
+    return "Refused: " + r.purpose.replace(/_/g, " ");
+  }
   return r.purpose.replace(/_/g, " ").replace(/^./, function(c){ return c.toUpperCase(); });
+}
+
+function visible(r){
+  return loanFilter === null || r.loan === loanFilter;
+}
+
+function renderLoans(){
+  var host = $("loans");
+  if (LOANS.length < 2){ host.hidden = true; return; }
+  host.hidden = false;
+  var pills = $("loanPills");
+  pills.innerHTML = "";
+  ["All loans"].concat(LOANS).forEach(function(label, index){
+    var value = index === 0 ? null : label;
+    var b = document.createElement("button");
+    b.className = "loan-pill";
+    b.type = "button";
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", loanFilter === value ? "true" : "false");
+    b.textContent = label;
+    b.addEventListener("click", function(){
+      loanFilter = value;
+      if (value !== null){
+        LOAN = value;
+        /* Move the detail pane to the first record of the loan just chosen,
+           rather than leaving it on a record no longer in the list. */
+        for (var i = 0; i < records.length; i++){
+          if (records[i].loan === value){ selected = i; break; }
+        }
+      }
+      render();
+    });
+    pills.appendChild(b);
+  });
 }
 
 function renderChain(){
   var host = $("chain");
   host.innerHTML = "";
   records.forEach(function(r, i){
+    if (!visible(r)) return;
     var b = document.createElement("button");
     b.className = "rec" + (brokenAt !== null && i >= brokenAt ? " broken" : "");
     b.setAttribute("role", "option");
@@ -480,7 +623,7 @@ function renderDetail(){
     }).join("");
   } else if (r.note){
     box.hidden = false;
-    box.className = "findings review";
+    box.className = "findings" + (r.event === "ai_denied" ? " denied" : " review");
     box.innerHTML = "<p>" + r.note + "</p>";
   } else {
     box.hidden = true;
@@ -489,12 +632,14 @@ function renderDetail(){
 
 function renderPacket(){
   var p = BUNDLE.packets[LOAN];
+  if (!p) return;
   var s = p.summary;
   var cells = [
     [s.ai_decisions, "AI decisions on this loan", ""],
     [s.human_reviews, "recorded human reviews", "ok"],
     [s.rejected, "outputs the gate refused", "warn"],
     [s.routed_to_human, "routed to a person", "warn"],
+    [s.denied_by_policy, "calls the policy refused", "ok"],
     [p.mandate_coverage.complete ? "8 / 8" : "gaps", "recorded fields present on every record",
       p.mandate_coverage.complete ? "ok" : "warn"]
   ];
@@ -508,7 +653,84 @@ function renderPacket(){
     "an audit trail that shows only the successes is a brochure.";
 }
 
-function render(){ renderChain(); renderDetail(); }
+function renderDisclosure(){
+  var d = BUNDLE.disclosure;
+  if (!d){ return; }
+
+  $("dModels").innerHTML = (d.models.length ? d.models : []).map(function(m){
+    return '<div class="drow"><b></b><em></em><span></span></div>';
+  }).join("") || '<div class="drow"><b>None recorded</b></div>';
+  var modelRows = $("dModels").querySelectorAll(".drow");
+  d.models.forEach(function(m, i){
+    var row = modelRows[i];
+    if (!row) return;
+    row.querySelector("b").textContent = m.model;
+    row.querySelector("em").textContent =
+      m.decisions + (m.decisions === 1 ? " decision" : " decisions");
+    row.querySelector("span").textContent = m.endpoints.join("  ·  ");
+  });
+
+  var s = d.safeguards, integrity = d.integrity;
+  var rows = [
+    ["Gate", "deterministic", "no model judges another model"],
+    ["Checks fired", Object.keys(s.checks_that_fired).length
+      ? Object.keys(s.checks_that_fired).map(function(k){
+          return k + " x" + s.checks_that_fired[k]; }).join(", ")
+      : "none", ""],
+    ["Policies in force", s.policies_in_force.join(", ") || "none", ""],
+    ["Chain", integrity.chain.verified ? "verified" : "BROKEN", ""],
+    ["Mandate coverage", integrity.mandate_coverage.complete ? "complete" : "gaps", ""]
+  ];
+  if (s.decisions_under_no_evaluated_policy){
+    rows.splice(3, 0, ["Ungoverned",
+      s.decisions_under_no_evaluated_policy + " decision(s)",
+      "ran with no policy evaluated"]);
+  }
+  if (s.policy_review){
+    rows.splice(3, 0, ["Policy review",
+      s.policy_review.overdue ? "OVERDUE" : "current", s.policy_review.detail]);
+  }
+  $("dSafeguards").innerHTML = rows.map(function(){
+    return '<div class="drow"><b></b><em></em><span></span></div>';
+  }).join("");
+  var sRows = $("dSafeguards").querySelectorAll(".drow");
+  rows.forEach(function(r, i){
+    sRows[i].querySelector("b").textContent = r[0];
+    sRows[i].querySelector("em").textContent = r[1];
+    sRows[i].querySelector("span").textContent = r[2];
+  });
+
+  var head = ["Purpose", "Total", "Pass", "Review", "Reject", "Denied",
+              "Committed", "To a person"];
+  var html = "<thead><tr>" + head.map(function(h){
+    return "<th>" + h + "</th>"; }).join("") + "</tr></thead><tbody>";
+  d.purposes.forEach(function(p){
+    function cell(n, cls){
+      return '<td class="n ' + (n ? cls : "z") + '">' + n + "</td>";
+    }
+    html += "<tr>" +
+      '<td class="p"></td>' +
+      '<td class="n">' + p.decisions + "</td>" +
+      cell(p.pass, "g") + cell(p.review, "a") + cell(p.reject, "r") +
+      cell(p.denied, "") +
+      '<td class="n' + (p.overrides ? ' a' : '') + '">' + p.committed +
+        (p.overrides ? " (" + p.overrides + " over an objection)" : "") + "</td>" +
+      '<td class="n">' + p.routed_to_human + "</td>" +
+      "</tr>";
+  });
+  var table = $("dPurposes");
+  table.innerHTML = html + "</tbody>";
+  /* Purpose names come from a policy file, so they are set as text rather than
+     interpolated into the markup above. */
+  var cells = table.querySelectorAll("td.p");
+  d.purposes.forEach(function(p, i){
+    if (cells[i]) cells[i].textContent = p.purpose.replace(/_/g, " ");
+  });
+
+  $("discloseLimits").textContent = d.limits.join("  ");
+}
+
+function render(){ renderLoans(); renderChain(); renderDetail(); renderPacket(); }
 
 /* ---- controls ---- */
 async function runVerify(){
@@ -565,7 +787,24 @@ $("btnRestore").addEventListener("click", function(){
   runVerify();
 });
 
+/* ---- embed ---- */
+var EMBEDDED = /(?:^|[?&])embed=1(?:&|$)/.test(location.search);
+if (EMBEDDED){
+  document.body.className = (document.body.className + " embed").trim();
+  // Same-origin, so the host can size the frame to the content rather than
+  // guessing and leaving a scrollbar inside a scrollbar.
+  var post = function(){
+    parent.postMessage(
+      {custodyHeight: document.documentElement.scrollHeight}, "*");
+  };
+  if (typeof ResizeObserver === "function"){
+    new ResizeObserver(post).observe(document.documentElement);
+  }
+  post();
+}
+
 /* ---- init ---- */
+renderDisclosure();
 renderPacket();
 render();
 $("footMeta").textContent =

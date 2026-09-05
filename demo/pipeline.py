@@ -26,10 +26,12 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
 
-from custody.examiner import export  # noqa: E402
+from custody.examiner import disclosure, export  # noqa: E402
 from custody.ledger import Ledger  # noqa: E402
+from custody.policy import Policy, PolicyDenied  # noqa: E402
 
 FIXTURES = pathlib.Path(__file__).resolve().parent / "fixtures"
+POLICY = pathlib.Path(__file__).resolve().parent / "policy.json"
 LOAN = "1000254"
 BORROWER = "Dana Whitfield"          # fabricated
 UNDERWRITER = "sam.okafor@northgate-lending.example"
@@ -47,14 +49,21 @@ def read(name: str) -> str:
     return (FIXTURES / name).read_text(encoding="utf-8")
 
 
-def run(path: str = str(ROOT / "demo" / "ledger.json")) -> dict:
+def run(path: str = str(ROOT / "demo" / "ledger.json"), db: str = ":memory:") -> dict:
+    """Build the synthetic ledger. `db` writes it to a real store as well, so
+    `custody disclose --db` and `custody serve --db` have something to read."""
     paystub = read("paystub-2026-07-15.txt")
     w2 = read("w2-2025.txt")
     bank = read("bank-statement-2026-06.txt")
 
+    # The policy is a document, not a constant in this file. Every confidence
+    # floor and closed vocabulary below comes out of it, so the numbers that ran
+    # are the numbers someone approved -- and `policy.json` is reviewable by a
+    # person who cannot read Python.
     ledger = Ledger(
-        policy="northgate-uw-policy-v3.2",
+        policy=Policy.load(POLICY),
         signing_key=Ed25519PrivateKey.from_private_bytes(DEMO_SEED),
+        path=db,
     )
     ids = [BORROWER]
 
@@ -83,7 +92,7 @@ def run(path: str = str(ROOT / "demo" / "ledger.json")) -> dict:
     # shape of an answer rather than an answer, and nothing downstream of the
     # gate could tell the difference.
     with ledger.decision(loan=LOAN, principal=PROCESSOR, purpose="income_calculation",
-                         identifiers=ids) as d:
+                         identifiers=ids, data=["income", "employment", "paystub", "w2"]) as d:
         out = d.call(
             model="claude-sonnet-5",
             prompt=(
@@ -171,12 +180,36 @@ def run(path: str = str(ROOT / "demo" / "ledger.json")) -> dict:
         assert v.ok, f"the final write should pass on human-established evidence: {v.findings}"
         d.commit(outcome=out)
 
+    # --- 6. A use the policy does not permit ---------------------------------
+    # The condition went to a person, and someone reaches for the model to draft
+    # the adverse-action language. `adverse_action_reasoning` is in the policy
+    # and marked not approved, so the call does not happen: no prompt is sent,
+    # no output comes back, and the refusal is a signed record like any other.
+    #
+    # This is the record a lender has that a policy document does not give them.
+    # "We do not use AI for adverse action" is an assertion. A denial in the
+    # chain, on a named loan, at a timestamp, is evidence.
+    try:
+        with ledger.decision(loan=LOAN, principal=PROCESSOR,
+                             purpose="adverse_action_reasoning", identifiers=ids) as d:
+            d.call(
+                model="claude-sonnet-5",
+                prompt=f"Draft the adverse action reason for loan {LOAN}.",
+                sources=[bank],
+                response={"reason": "insufficient documentation"},
+            )
+            raise AssertionError("the policy did not refuse an unapproved use case")
+    except PolicyDenied:
+        pass
+
     bundle = export(ledger, path)
+    bundle["disclosure"] = disclosure(ledger)
     return bundle
 
 
 if __name__ == "__main__":
-    out = run()
+    import sys
+    out = run(db=sys.argv[1] if len(sys.argv) > 1 else ":memory:")
     print(f"records:        {len(out['records'])}")
     print(f"chain verified: {out['chain']['verified']}")
     print(f"policy:         {out['policy_version']}")
@@ -184,6 +217,21 @@ if __name__ == "__main__":
         s = pkt["summary"]
         print(
             f"loan {loan}: {s['ai_decisions']} AI decisions, {s['human_reviews']} human "
-            f"reviews, {s['rejected']} rejected, {s['routed_to_human']} routed"
+            f"reviews, {s['rejected']} rejected, {s['routed_to_human']} routed, "
+            f"{s['denied_by_policy']} denied by policy"
         )
         print(f"  mandate coverage complete: {pkt['mandate_coverage']['complete']}")
+        review = pkt["policy_review"]
+        print(f"  policy review: {review['detail']}")
+
+    # The per-loan packet answers what happened to one file. This is the
+    # question the letter asks, and printing it here means the demo ends on the
+    # artifact the product exists to produce.
+    report = out["disclosure"]
+    print()
+    print("disclosure:")
+    for model in report["models"]:
+        print(f"  {model['model']}: {model['decisions']} decision(s)")
+    for purpose in report["purposes"]:
+        print(f"  {purpose['purpose']}: {purpose['pass']} pass, {purpose['review']} review, "
+              f"{purpose['reject']} reject, {purpose['denied']} denied")

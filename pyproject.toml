@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "custody-ledger"
-version = "0.6.0"
+version = "0.8.0"
 description = "A signed chain of evidence for AI decisions in mortgage lending"
 readme = "README.md"
 requires-python = ">=3.10"

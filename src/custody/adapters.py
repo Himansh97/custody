@@ -210,14 +210,23 @@ def azure_openai_extractor(
 # ---------------------------------------------------------------------- fixed
 
 
-def replay(fields: dict, confidence: float | None = None, citations: dict | None = None) -> Adapter:
+def replay(fields: dict, confidence: float | None = None,
+           citations: dict | None = None, model: str | None = None) -> Adapter:
     """A fixed response, for tests and for demos that must be reproducible.
 
     The gate neither knows nor cares where an output came from, so a replayed
     response exercises exactly the same path as a live one. That is what lets the
     shipped demo ledger be byte-for-byte reproducible by anyone who clones the
     repo.
+
+    The endpoint names the model whose output is being replayed, not the word
+    `fixture`. Both halves matter: a policy approves models, so a replay that
+    identified no model could never satisfy one -- and a record that hid the
+    replay would claim a call that did not happen. `replay:claude-sonnet-5` says
+    both things at once.
     """
+    endpoint = f"replay:{model}" if model else "replay:fixture"
+
     def call(instruction: str, documents: Sequence[tuple[str, str]]):
-        return dict(fields), confidence, "replay:fixture", dict(citations or {})
+        return dict(fields), confidence, endpoint, dict(citations or {})
     return call

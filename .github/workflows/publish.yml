@@ -83,6 +83,7 @@ jobs:
         run: |
           python demo/pipeline.py
           node tests/verify_like_the_page.js demo/ledger.json
+          node tests/render_like_the_page.js
 
   build:
     needs: test
@@ -108,9 +109,22 @@ jobs:
           /tmp/check/bin/custody keygen --out k.key
           printf 'Wages 98,410.00\n' > w2.txt
           printf '{"fields":{"wages":98410.0},"confidence":0.95,"citations":{"wages":"w2"}}\n' > r.json
+          /tmp/check/bin/custody policy --new p.json
           /tmp/check/bin/custody run --loan 1 --principal ci@example.com \
-            --instruction "Extract wages." --doc w2.txt --replay r.json --key k.key
+            --purpose income_calculation --data income --data w2 \
+            --instruction "Extract wages." --doc w2.txt --replay r.json --key k.key \
+            --policy p.json
           /tmp/check/bin/custody verify custody.db
+          /tmp/check/bin/custody disclose --policy p.json
+          # A use case the shipped policy marks not approved must not reach a
+          # model, and must exit non-zero. A control nobody checks in CI is a
+          # control that quietly stops working.
+          if /tmp/check/bin/custody run --loan 1 --principal ci@example.com \
+               --purpose adverse_action_reasoning --data income \
+               --instruction "Draft the reason." --doc w2.txt --replay r.json \
+               --key k.key --policy p.json; then
+            echo "the policy did not refuse an unapproved use case"; exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: dist

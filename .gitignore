@@ -6,3 +6,7 @@ dist/
 build/
 *.egg-info/
 custody-signing.key
+
+# Built from demo/ledger.json by demo/build_page.py. The ledger is the
+# source of truth; a 54 KB derived page in the history is noise.
+demo/page.html

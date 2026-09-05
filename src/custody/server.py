@@ -27,7 +27,7 @@ import secrets
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
-from .examiner import chain_status, packet
+from .examiner import chain_status, disclosure, packet
 from .ledger import Ledger
 from .render import build_html
 
@@ -43,6 +43,7 @@ def _bundle(ledger: Ledger) -> dict:
         "chain": chain_status(records, ledger.public_key),
         "records": records,
         "packets": {loan: packet(ledger, loan) for loan in loans},
+        "disclosure": disclosure(ledger),
     }
 
 
@@ -106,6 +107,10 @@ def _handler(ledger: Ledger, token: str | None):
                 self._json(200, ledger.records())
                 return
 
+            if path == "/api/disclose":
+                self._json(200, disclosure(ledger))
+                return
+
             if path == "/api/verify":
                 self._json(200, chain_status(ledger.records(), ledger.public_key))
                 return
@@ -120,7 +125,8 @@ def _handler(ledger: Ledger, token: str | None):
                 return
 
             self._json(404, {"error": "not found",
-                             "routes": ["/", "/api/records", "/api/verify", "/api/loan/{loan}"]})
+                             "routes": ["/", "/api/records", "/api/verify",
+                                        "/api/disclose", "/api/loan/{loan}"]})
 
         def log_message(self, fmt, *args):
             print(f"  {self.address_string()} {fmt % args}")

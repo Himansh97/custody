@@ -16,16 +16,20 @@ signed logs; those are this library's design choices. `docs/ll-2026-04.md` marks
 the boundary. Not legal advice, and not a statement of what Fannie Mae requires.
 """
 from .chain import ChainError, verify_chain
-from .examiner import export, packet
-from .ledger import MANDATE_FIELDS, Decision, Ledger
+from .examiner import disclosure, export, packet
+from .ledger import DENIAL_FIELDS, MANDATE_FIELDS, Decision, Ledger
+from .policy import Allowance, Policy, PolicyDenied, PolicyError, write_starter
+from .replicate import anchor_sink, jsonl_sink, replicate
 from .store import Store
 from .signing import ECDSA_P256, ED25519, KeyVaultSigner, LocalSigner, Signer
-from .verify import PASS, REJECT, REVIEW, Verdict, gate
+from .verify import DENIED, PASS, REJECT, REVIEW, Verdict, gate
 
 __all__ = [
     "Ledger", "Decision", "Store", "gate", "Verdict",
-    "PASS", "REVIEW", "REJECT", "packet", "export",
-    "verify_chain", "ChainError", "MANDATE_FIELDS",
+    "PASS", "REVIEW", "REJECT", "DENIED", "packet", "export", "disclosure",
+    "verify_chain", "ChainError", "MANDATE_FIELDS", "DENIAL_FIELDS",
+    "Policy", "Allowance", "PolicyDenied", "PolicyError", "write_starter",
+    "replicate", "jsonl_sink", "anchor_sink",
     "Signer", "LocalSigner", "KeyVaultSigner", "ED25519", "ECDSA_P256",
 ]
-__version__ = "0.6.0"
+__version__ = "0.8.0"

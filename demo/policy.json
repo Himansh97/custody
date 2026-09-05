@@ -1,0 +1,53 @@
+{
+  "policy_id": "NORTHGATE-UW-001",
+  "version": "3.2",
+  "owner": "compliance@northgate-lending.example",
+  "last_reviewed": "2026-06-15",
+  "review_interval_days": 365,
+  "use_cases": {
+    "document_classification": {
+      "approved": true,
+      "models": ["claude-haiku-4-5"],
+      "confidence_floor": 0.80,
+      "human_review": "on_review",
+      "ai_can_decide": true,
+      "vocabulary": {
+        "doc_type": ["paystub", "w2", "bank_statement", "1003", "unknown"]
+      },
+      "note": "Filing only. Nothing downstream reads a classification as a fact."
+    },
+    "income_calculation": {
+      "approved": true,
+      "models": ["claude-sonnet-5"],
+      "confidence_floor": 0.85,
+      "human_review": "on_review",
+      "ai_can_decide": false,
+      "allowed_data": ["income", "employment", "paystub", "w2"],
+      "prohibited_data": ["ssn", "bank_account_number"],
+      "note": "AI may propose a qualifying income figure. An underwriter decides it."
+    },
+    "condition_clearing": {
+      "approved": true,
+      "models": ["claude-sonnet-5"],
+      "confidence_floor": 0.80,
+      "human_review": "on_review",
+      "ai_can_decide": false,
+      "vocabulary": {
+        "condition_status": ["satisfied", "not_satisfied", "needs_review"]
+      }
+    },
+    "los_write": {
+      "approved": true,
+      "models": ["claude-sonnet-5"],
+      "confidence_floor": 0.95,
+      "human_review": "on_review",
+      "ai_can_decide": true,
+      "note": "Assembly of figures a human has already established. Not a judgement."
+    },
+    "adverse_action_reasoning": {
+      "approved": false,
+      "models": [],
+      "note": "Not approved for AI. Adverse action reasons carry ECOA exposure and are written by a person."
+    }
+  }
+}

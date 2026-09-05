@@ -30,6 +30,12 @@ from typing import Any, Iterable, Sequence
 
 PASS, REVIEW, REJECT = "pass", "review", "reject"
 
+# Not a gate verdict. `denied` is what happened to a response that was never
+# obtained, because the policy refused the call before the model saw it. It
+# shares this module so there is one vocabulary for `response_treatment`
+# rather than two that drift.
+DENIED = "denied"
+
 # Ordered worst-first so a verdict is the max of its findings.
 _RANK = {PASS: 0, REVIEW: 1, REJECT: 2}
 
@@ -158,6 +164,36 @@ def check_vocabulary(
     return findings
 
 
+def check_human_review(required: bool) -> list[Finding]:
+    """Some use cases are approved only with a person on the end of them.
+
+    That is a policy statement, not a property of the output, so it cannot be
+    inferred from the model's answer -- but it has to reach `response_treatment`
+    or the record would say a decision was cleared to commit when the policy in
+    force said it never was.
+    """
+    if not required:
+        return []
+    return [
+        Finding(
+            "policy_human_review",
+            REVIEW,
+            "the policy for this use case requires human review of every output",
+        )
+    ]
+
+
+def check_model_approval(reason: str | None) -> list[Finding]:
+    """The model that answered was not the one the policy approved.
+
+    Only reachable when a deployment resolves to a different model than the one
+    the call asked for -- which cannot be known before the response arrives, so
+    it cannot be a pre-call refusal. It is a rejection instead: the output
+    exists, and it must not be used.
+    """
+    return [Finding("policy_model", REJECT, reason)] if reason else []
+
+
 def check_confidence(confidence: float | None, floor: float) -> list[Finding]:
     """Below the floor, a person decides. Never a rejection — low confidence is
     not evidence of being wrong, only of not being sure."""
@@ -190,6 +226,8 @@ def gate(
     allowed: dict[str, Iterable[str]] | None = None,
     confidence: float | None = None,
     confidence_floor: float = 0.80,
+    human_review_required: bool = False,
+    model_denied: str | None = None,
 ) -> Verdict:
     """Run every check. The verdict is the most severe finding."""
     verdict = Verdict()
@@ -198,6 +236,8 @@ def gate(
         + check_grounding(output, citations)
         + check_vocabulary(output, allowed)
         + check_confidence(confidence, confidence_floor)
+        + check_human_review(human_review_required)
+        + check_model_approval(model_denied)
     ):
         verdict.add(finding)
     return verdict
