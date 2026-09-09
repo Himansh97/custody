@@ -66,7 +66,7 @@ _POLICY_KEYS = frozenset({
 })
 _USE_CASE_KEYS = frozenset({
     "approved", "models", "confidence_floor", "human_review", "ai_can_decide",
-    "allowed_data", "prohibited_data", "vocabulary", "note",
+    "allowed_data", "prohibited_data", "vocabulary", "note", "principals",
 })
 
 # LL-2026-04 requires an owner who reviews the policies at least annually. That
@@ -146,6 +146,9 @@ class UseCase:
     allowed_data: tuple[str, ...]
     prohibited_data: tuple[str, ...]
     vocabulary: Mapping[str, tuple[str, ...]]
+    # None means the use case names no principals and restricts none. That is
+    # not the same as (), which names an empty set and so permits nobody.
+    principals: tuple[str, ...] | None = None
 
 
 class Policy:
@@ -246,6 +249,16 @@ class Policy:
         if not isinstance(vocabulary, Mapping):
             raise PolicyError(f"use case {name!r}: vocabulary must be an object")
 
+        if "principals" not in body:
+            principals = None
+        else:
+            raw = body["principals"]
+            if isinstance(raw, (str, bytes)) or not isinstance(raw, (list, tuple)):
+                raise PolicyError(
+                    f"use case {name!r}: principals must be a list of identities"
+                )
+            principals = tuple(str(p) for p in raw)
+
         return UseCase(
             name=name,
             approved=bool(body.get("approved", False)),
@@ -256,6 +269,7 @@ class Policy:
             allowed_data=tuple(body.get("allowed_data") or ()),
             prohibited_data=tuple(body.get("prohibited_data") or ()),
             vocabulary={k: tuple(v) for k, v in vocabulary.items()},
+            principals=principals,
         )
 
     # --------------------------------------------------------------- evaluation
@@ -299,6 +313,39 @@ class Policy:
             allowed_data=case.allowed_data,
             prohibited_data=case.prohibited_data,
             vocabulary=case.vocabulary,
+        )
+
+    def for_principal(self, purpose: str, principal: str) -> Allowance:
+        """May this person invoke this use case?
+
+        `principal` was on every record from the first release and read by
+        nothing, which made it provenance rather than authorization: it said who
+        claimed to be asking and permitted them whatever the use case permitted
+        anybody.
+
+        A use case that names no principals restricts none. Denying by default
+        would be the stricter rule and the wrong one -- it would silently stop
+        every policy written before this existed. The omission is reported by
+        the disclosure instead, which is where an unstated control belongs.
+        """
+        allowance = self.for_purpose(purpose)
+        if not allowance.allowed:
+            return allowance
+
+        approved = self.use_cases[purpose].principals
+        if approved is None or principal in approved:
+            return allowance
+
+        if not approved:
+            return _deny(
+                f"use case {purpose!r} in {self.identifier} names no approved "
+                "principals, so nobody may invoke it",
+                self, purpose,
+            )
+        return _deny(
+            f"principal {principal!r} is not approved for {purpose!r} in "
+            f"{self.identifier}; approved: {', '.join(sorted(approved))}",
+            self, purpose,
         )
 
     def for_data(self, purpose: str, declared: Iterable[str],
@@ -472,7 +519,8 @@ STARTER_POLICY: dict[str, Any] = {
             "ai_can_decide": True,
             "allowed_data": ["income", "employment", "paystub", "w2"],
             "prohibited_data": ["ssn", "bank_account_number"],
-            "note": "Replace owner and last_reviewed before this governs anything real.",
+            "principals": ["you@your-lender.example"],
+            "note": "Replace owner, last_reviewed and principals before this governs anything real.",
         },
         "adverse_action_reasoning": {
             "approved": False,

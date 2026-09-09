@@ -167,6 +167,7 @@ def disclosure(ledger, *, requested_by: str = "Fannie Mae") -> dict[str, Any]:
             "checks_that_fired": dict(sorted(checks.items())),
             "policies_in_force": policies,
             "decisions_under_no_evaluated_policy": ungoverned,
+            "use_cases_restricting_no_principal": use_cases_restricting_no_principal(ledger),
             "policy_review": review_status(ledger),
         },
         "integrity": {
@@ -183,6 +184,24 @@ def disclosure(ledger, *, requested_by: str = "Fannie Mae") -> dict[str, Any]:
             "No bias or fair-lending testing is performed or claimed.",
         ],
     }
+
+
+def use_cases_restricting_no_principal(ledger) -> list[str]:
+    """Approved use cases that any authenticated caller may invoke.
+
+    `Policy.for_principal` permits these deliberately: denying by default would
+    silently stop every policy written before principals existed. The cost of
+    that choice is a control nobody stated, and an unstated control is exactly
+    what surfaces during an audit rather than before one. So it is named here,
+    where a reader is already asking what the safeguards are.
+    """
+    policy = getattr(ledger, "policy_doc", None)
+    if policy is None:
+        return []
+    return sorted(
+        name for name, case in policy.use_cases.items()
+        if case.approved and case.principals is None
+    )
 
 
 def review_status(ledger) -> dict[str, Any] | None:

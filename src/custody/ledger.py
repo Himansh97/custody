@@ -157,6 +157,12 @@ class Decision:
 
         policy = self.ledger.policy_doc
         if policy is not None:
+            # Who first. A caller who may not use this purpose at all should
+            # not have their documents scanned to find that out.
+            verdict = policy.for_principal(self.purpose, self.principal)
+            if not verdict.allowed:
+                self._deny(verdict)
+
             # The documents as well as the declaration, so a prohibited class
             # with a recognisable shape cannot be evaded by naming another one.
             verdict = policy.for_data(

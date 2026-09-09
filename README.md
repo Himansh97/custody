@@ -35,7 +35,7 @@ custody keygen                          # a signing key
 custody policy --new uw-policy.json     # a policy to edit
 custody run --policy uw-policy.json --purpose income_calculation \
     --data income --data paystub \
-    --loan 1000254 --principal you@lender.com \
+    --loan 1000254 --principal you@your-lender.example \
     --instruction "Extract qualifying monthly income." --doc paystub.txt
 custody disclose                        # what you hand someone who asks
 ```
@@ -100,7 +100,8 @@ the call was allowed to happen at all, and it is a document rather than code:
       "confidence_floor": 0.85,
       "ai_can_decide": false,
       "allowed_data": ["income", "employment", "paystub", "w2"],
-      "prohibited_data": ["ssn", "bank_account_number"]
+      "prohibited_data": ["ssn", "bank_account_number"],
+      "principals": ["uw-desk@northgate-lending.example"]
     },
     "adverse_action_reasoning": { "approved": false, "models": [] }
   }
@@ -119,6 +120,16 @@ themselves, so declaring the wrong thing does not launder the right one. If a
 use case sets any data rule and a decision declares nothing, the call is
 refused: a rule that quietly fails to apply is a control document making a
 statement that is not true.
+
+`principals` names who may invoke a use case. It was the last field the ledger
+recorded and nothing read: a `principal` that is written down but never checked
+is provenance, not authorization -- it says who claimed to be asking and permits
+them whatever the use case permits anybody. A use case naming no `principals`
+restricts none, because denying by default would silently stop every policy
+written before the field existed. That omission is not silent either: the
+disclosure lists it under `use_cases_restricting_no_principal`, beside the count
+of decisions that ran under no evaluated policy. An empty list permits nobody,
+the same way `"models": []` approves no model rather than all of them.
 
 `d.call()` raises before the model is invoked when the policy refuses, and the
 refusal is a signed record like any other &mdash; because a ledger showing only
@@ -282,7 +293,7 @@ lines if neither fits.
 ```bash
 export AZURE_OPENAI_ENDPOINT=https://acme-uw.openai.azure.com/
 custody run --provider azure-openai --deployment gpt-4o-prod \
-    --loan 1000254 --principal you@lender.com \
+    --loan 1000254 --principal you@your-lender.example \
     --instruction "Extract qualifying monthly income." --doc paystub.txt
 ```
 
@@ -388,7 +399,7 @@ custody policy --new uw-policy.json   # a starter policy to edit
 
 custody run --policy uw-policy.json --purpose income_calculation \
     --data income --data paystub \
-    --loan 1000254 --principal you@lender.com \
+    --loan 1000254 --principal you@your-lender.example \
     --instruction "Extract qualifying monthly income." \
     --doc paystub.txt --doc w2.txt \
     --redact "Borrower Name" --model claude-sonnet-5
