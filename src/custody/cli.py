@@ -535,12 +535,14 @@ def _extractor(args):
 
 
 def cmd_gateway(args) -> int:
-    from .gateway import serve_gateway
+    from .gateway import load_identities, serve_gateway
     from .ledger import Ledger
 
+    identities = load_identities(args.identities) if args.identities else None
     ledger = Ledger(policy=args.policy, signer=load_signer(args.key), path=args.db)
     serve_gateway(ledger=ledger, extract=_extractor(args), host=args.host,
-                  port=args.port, token=args.token, no_token=args.no_token)
+                  port=args.port, token=args.token, no_token=args.no_token,
+                  identities=identities)
     return 0
 
 
@@ -670,6 +672,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, default=8788)
     p.add_argument("--token", default=None)
     p.add_argument("--no-token", action="store_true")
+    p.add_argument("--identities", default=None,
+                   help="a JSON file of {token: principal}; the principal then\n"
+                        "comes from the credential rather than the request body")
     p.set_defaults(func=cmd_gateway)
 
     p = sub.add_parser(

@@ -257,9 +257,28 @@ A refused purpose returns 403 with the reason and no output, because the model
 was never asked. There is no request to this service that returns a model's
 answer without also having written a record.
 
-The bearer token is a floor, not a control: it carries no identity, and
-`principal` is a claim the caller makes about itself. Put it behind your SSO and
-set `principal` from the session.
+One shared token authenticates a port, not a caller: it carries no identity, so
+any holder of it could post a record naming anybody. Since the policy now
+authorizes on `principal`, that made the field self-asserted exactly where it
+had to be trusted. Bind tokens to the identities that hold them instead:
+
+```bash
+custody gateway --policy uw-policy.json --identities callers.json
+```
+
+```json
+{ "9f3c...": "jane@lender.com", "2a71...": "uw-desk@lender.example" }
+```
+
+The principal then comes from the credential. A body naming a different one is
+refused with 403 rather than quietly rewritten, because a caller that believes
+it is acting for somebody else has a bug, and silently correcting the record
+leaves the caller still wrong about what it just did. A body naming nobody is
+fine: the credential already said.
+
+That file is every caller's password, so it belongs wherever the signing key
+does. `--identities` is still a floor rather than a substitute for SSO in front
+of this; it just stops the floor being anonymous.
 
 ## Getting the records into a warehouse
 

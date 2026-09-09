@@ -40,6 +40,7 @@ import json
 import os
 import secrets
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 from .ledger import Ledger
 from .policy import PolicyDenied
@@ -71,15 +72,46 @@ def _documents(payload: dict) -> list[tuple[str, str]]:
     return out
 
 
-def handle_decision(ledger: Ledger, extract, payload: dict) -> tuple[int, dict]:
+def resolve_principal(payload: dict, authenticated: str | None) -> str:
+    """Who this decision is recorded as, and who decides that.
+
+    In the library the caller is the process, so `principal` is the process
+    naming its user and there is nothing else it could be. Over the wire it was
+    the same field with none of that standing: a bearer token carries no
+    identity, so any holder of one could write a record naming anybody. The
+    field the policy now authorizes on was, on this transport, self-asserted.
+
+    When the credential names someone, that name wins. A body naming a
+    different one is refused rather than quietly rewritten: a caller that
+    believes it is acting for somebody else has a bug or a misconfiguration,
+    and overriding it silently records the right principal while leaving the
+    caller wrong about what it just did.
+    """
+    claimed = payload.get("principal")
+    if authenticated is None:
+        if not claimed:
+            raise GatewayError(400, "principal is required")
+        return str(claimed)
+    if claimed and str(claimed) != authenticated:
+        raise GatewayError(
+            403,
+            f"credential is bound to {authenticated!r}; the body claims "
+            f"{str(claimed)!r}. Send no principal, or the one you authenticated as.",
+        )
+    return authenticated
+
+
+def handle_decision(ledger: Ledger, extract, payload: dict, *,
+                    authenticated_principal: str | None = None) -> tuple[int, dict]:
     """One decision, start to finish. Returns the HTTP status and the body.
 
     Split out from the HTTP plumbing so it can be tested without a socket, and
     so the only difference between the gateway and the library is transport.
     """
-    for required in ("loan", "principal", "purpose"):
+    for required in ("loan", "purpose"):
         if not payload.get(required):
             raise GatewayError(400, f"{required} is required")
+    principal = resolve_principal(payload, authenticated_principal)
 
     documents = _documents(payload)
     instruction = payload.get("instruction") or ""
@@ -102,7 +134,7 @@ def handle_decision(ledger: Ledger, extract, payload: dict) -> tuple[int, dict]:
 
     with ledger.decision(
         loan=str(payload["loan"]),
-        principal=str(payload["principal"]),
+        principal=principal,
         purpose=str(payload["purpose"]),
         identifiers=payload.get("identifiers") or (),
         data=payload.get("data") or (),
@@ -155,7 +187,14 @@ def handle_decision(ledger: Ledger, extract, payload: dict) -> tuple[int, dict]:
     return 200, allowed
 
 
-def _handler(ledger: Ledger, extract, token: str | None):
+def _handler(ledger: Ledger, extract, token: str | None,
+             identities: dict[str, str] | None = None):
+    """`identities` maps a bearer token to the principal that holds it.
+
+    One shared secret authenticates a port. A secret per identity authenticates
+    a caller, which is the difference between knowing a request is permitted and
+    knowing whose it is.
+    """
     class Handler(BaseHTTPRequestHandler):
         server_version = "custody-gateway"
 
@@ -168,15 +207,26 @@ def _handler(ledger: Ledger, extract, token: str | None):
             self.end_headers()
             self.wfile.write(body)
 
-        def _authorised(self) -> bool:
-            if token is None:
-                return True
+        def _authorised(self) -> tuple[bool, str | None]:
+            """Whether to answer at all, and who the caller is if we know."""
             header = self.headers.get("Authorization", "")
             supplied = header[7:] if header.startswith("Bearer ") else ""
-            return hmac.compare_digest(supplied, token)
+
+            if identities:
+                # compare_digest against every binding rather than a dict
+                # lookup, so a wrong token costs the same whatever it is.
+                for candidate, principal in identities.items():
+                    if hmac.compare_digest(supplied, candidate):
+                        return True, principal
+                return False, None
+
+            if token is None:
+                return True, None
+            return hmac.compare_digest(supplied, token), None
 
         def do_POST(self) -> None:  # noqa: N802 - stdlib naming
-            if not self._authorised():
+            ok, principal = self._authorised()
+            if not ok:
                 self._json(401, {"error": "unauthorised"})
                 return
             if self.path.rstrip("/") not in ("/decision", ""):
@@ -197,7 +247,8 @@ def _handler(ledger: Ledger, extract, token: str | None):
                 return
 
             try:
-                status, body = handle_decision(ledger, extract, payload)
+                status, body = handle_decision(
+                    ledger, extract, payload, authenticated_principal=principal)
             except GatewayError as exc:
                 self._json(exc.status, {"error": str(exc)})
                 return
@@ -212,6 +263,9 @@ def _handler(ledger: Ledger, extract, token: str | None):
             self._json(status, body)
 
         def do_GET(self) -> None:  # noqa: N802 - stdlib naming
+            if not self._authorised()[0]:
+                self._json(401, {"error": "unauthorised"})
+                return
             if self.path.rstrip("/") in ("/health", ""):
                 self._json(200, {"ok": True, "policy": ledger.policy,
                                  "records": ledger.store.count()})
@@ -227,19 +281,37 @@ def _handler(ledger: Ledger, extract, token: str | None):
 LOCAL = ("127.0.0.1", "localhost", "::1")
 
 
+def load_identities(path: str | Path) -> dict[str, str]:
+    """Read a `{token: principal}` file. Every token in it is a credential."""
+    target = Path(path)
+    data = json.loads(target.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or not data:
+        raise SystemExit(f"{target} must be a non-empty object of token -> principal")
+    for tok, who in data.items():
+        if not isinstance(tok, str) or not isinstance(who, str) or not tok or not who:
+            raise SystemExit(f"{target}: every entry must be a token string and a principal string")
+    mode = target.stat().st_mode & 0o777
+    if mode & 0o077:
+        print(f"  WARNING: {target} is mode {mode:o} and holds every caller's credential")
+    return dict(data)
+
+
 def serve_gateway(*, ledger: Ledger, extract, host: str = "127.0.0.1",
                   port: int = 8788, token: str | None = None,
-                  no_token: bool = False) -> None:
+                  no_token: bool = False,
+                  identities: dict[str, str] | None = None) -> None:
     token = token or os.environ.get("CUSTODY_TOKEN")
+    if identities is None and os.environ.get("CUSTODY_IDENTITIES"):
+        identities = load_identities(os.environ["CUSTODY_IDENTITIES"])
 
-    if host not in LOCAL and not token and not no_token:
+    if host not in LOCAL and not token and not identities and not no_token:
         raise SystemExit(
             f"refusing to bind {host} with no token.\n"
             "  This endpoint calls a model with documents you post to it and writes\n"
             "  loan records. Set CUSTODY_TOKEN, pass --token, or bind 127.0.0.1.\n"
             "  --no-token overrides this, and you should have a reason."
         )
-    if host in LOCAL and token is None and not no_token:
+    if host in LOCAL and token is None and not identities and not no_token:
         token = secrets.token_urlsafe(24)
 
     print(f"custody gateway  policy {ledger.policy}  signed with {ledger.algorithm}")
@@ -251,17 +323,23 @@ def serve_gateway(*, ledger: Ledger, extract, host: str = "127.0.0.1",
         if review and review["overdue"]:
             print(f"  WARNING: {review['detail']}")
     print(f"  POST http://{host}:{port}/decision")
-    if token:
+    if identities:
+        print(f"  {len(identities)} bound identities; principal comes from the credential")
+        print("  A body naming a different principal is refused, not rewritten.")
+    elif token:
         print(f"  Authorization: Bearer {token}")
     else:
         print("  NO TOKEN -- anyone who can reach this port can spend your model budget")
     print()
-    print("  A bearer token is a floor, not a control. It carries no identity, and")
-    print("  `principal` on every record is a claim the caller makes about itself.")
-    print("  Put this behind your SSO and set principal from the session.")
+    if not identities:
+        print("  A bearer token is a floor, not a control. It carries no identity, and")
+        print("  `principal` on every record is a claim the caller makes about itself.")
+        print("  Bind tokens to principals with --identities, or put this behind your")
+        print("  SSO and set principal from the session.")
     print("  ctrl-c to stop")
 
-    httpd = ThreadingHTTPServer((host, port), _handler(ledger, extract, token))
+    httpd = ThreadingHTTPServer(
+        (host, port), _handler(ledger, extract, token, identities=identities))
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
