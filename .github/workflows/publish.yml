@@ -110,7 +110,7 @@ jobs:
           printf 'Wages 98,410.00\n' > w2.txt
           printf '{"fields":{"wages":98410.0},"confidence":0.95,"citations":{"wages":"w2"}}\n' > r.json
           /tmp/check/bin/custody policy --new p.json
-          /tmp/check/bin/custody run --loan 1 --principal ci@example.com \
+          /tmp/check/bin/custody run --loan 1 --principal you@your-lender.example \
             --purpose income_calculation --data income --data w2 \
             --instruction "Extract wages." --doc w2.txt --replay r.json --key k.key \
             --policy p.json
@@ -119,11 +119,19 @@ jobs:
           # A use case the shipped policy marks not approved must not reach a
           # model, and must exit non-zero. A control nobody checks in CI is a
           # control that quietly stops working.
-          if /tmp/check/bin/custody run --loan 1 --principal ci@example.com \
+          if /tmp/check/bin/custody run --loan 1 --principal you@your-lender.example \
                --purpose adverse_action_reasoning --data income \
                --instruction "Draft the reason." --doc w2.txt --replay r.json \
                --key k.key --policy p.json; then
             echo "the policy did not refuse an unapproved use case"; exit 1
+          fi
+          # And a principal the shipped policy does not name. Same reasoning:
+          # the control that is not exercised here is the one that rots.
+          if /tmp/check/bin/custody run --loan 1 --principal nobody@example.com \
+               --purpose income_calculation --data income --data w2 \
+               --instruction "Extract wages." --doc w2.txt --replay r.json \
+               --key k.key --policy p.json; then
+            echo "the policy did not refuse an unapproved principal"; exit 1
           fi
       - uses: actions/upload-artifact@v4
         with:
