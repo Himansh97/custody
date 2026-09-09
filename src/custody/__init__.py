@@ -32,4 +32,4 @@ __all__ = [
     "replicate", "jsonl_sink", "anchor_sink",
     "Signer", "LocalSigner", "KeyVaultSigner", "ED25519", "ECDSA_P256",
 ]
-__version__ = "0.8.0"
+__version__ = "0.9.0"
