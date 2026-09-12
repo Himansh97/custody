@@ -297,6 +297,14 @@ def test_open_store_routes_on_the_url():
     assert not pathlib.Path("postgresql:").exists()
 
 
+# These two are not run by the generic loop below: each is the whole backend
+# suite, executed once per backend by _run, which labels its output
+# "PASS [sqlite] ..." and "PASS [postgres] ...". Named here so the guard in
+# check_every_test_runs.py can tell a deliberate arrangement from a test that
+# quietly never runs.
+RUNS_ELSEWHERE = {"test_sqlite_backend", "test_postgres_backend"}
+
+
 if __name__ == "__main__":
     failures = 0
     failures += _run("sqlite", _sqlite)

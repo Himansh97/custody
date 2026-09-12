@@ -71,6 +71,13 @@ jobs:
             echo "--- $t"
             python "$t"
           done
+      - name: Fail if a test file exists but runs nothing
+        # A file with no __main__ block, or a function defined below it, exits 0
+        # having tested less than it claimed. Eighteen tests across three files
+        # had never run here, including the gateway identity ones. A green run
+        # that quietly tested nothing is the failure this step exists to make
+        # loud.
+        run: python tests/check_every_test_runs.py
       - name: Fail if the Postgres backend was skipped
         # The suite prints SKIP and exits 0 when no DSN is set, which is right
         # for a laptop and wrong here: a green CI run that silently tested one
