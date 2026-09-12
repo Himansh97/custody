@@ -125,8 +125,20 @@ class ChainError(Exception):
         self.index = index
         self.record_id = record_id
         self.reason = reason
-        where = f"record {index}" + (f" ({record_id})" if record_id else "")
+        where = f"record {self.position}" + (f" ({record_id})" if record_id else "")
         super().__init__(f"{where}: {reason}")
+
+    @property
+    def position(self) -> int:
+        """Where the break is, counting from 1, as a person would read it.
+
+        `index` stays a 0-based offset into the list because that is what it is
+        and callers slice with it. But the ledger numbers its own records from 1
+        (`seq` is an AUTOINCREMENT primary key), so reporting the raw offset told
+        an examiner "record 1" and left them looking at `seq 1` when the damage
+        was to `seq 2`. Anything a human reads uses this.
+        """
+        return self.index + 1
 
 
 def verify_chain(records: Iterable[dict[str, Any]], public_key=None) -> None:

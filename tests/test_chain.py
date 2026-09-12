@@ -193,3 +193,22 @@ if __name__ == "__main__":
                 print(f"FAIL {name}: {exc}")
     print(f"\n{failures} failure(s)")
     raise SystemExit(1 if failures else 0)
+
+def test_the_break_is_numbered_from_one_for_people() -> None:
+    """`index` is a 0-based offset; `position` is what an examiner reads.
+
+    The ledger numbers records from 1 (`seq` is AUTOINCREMENT), so reporting the
+    raw offset sent anyone checking "BROKEN at record 1" to seq 1 when the edited
+    record was seq 2. The offset stays available for slicing; the message does not
+    use it.
+    """
+    records = _chain(4)
+    records[1]["decision_outcome"] = {"tampered": True}
+    try:
+        verify_chain(records)
+    except ChainError as exc:
+        assert exc.index == 1, f"offset should stay 0-based, got {exc.index}"
+        assert exc.position == 2, f"people-facing position should be 2, got {exc.position}"
+        assert "record 2" in str(exc), str(exc)
+    else:
+        raise AssertionError("a tampered record should break the chain")

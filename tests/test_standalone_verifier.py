@@ -62,7 +62,20 @@ def test_an_edited_record_is_caught_and_located() -> None:
     data["records"][0]["decision_outcome"] = {"g": 9999.00}
     code, out = _run(data)
     assert code == 1
-    assert "BROKEN at record 0" in out
+    # Numbered from 1, matching the ledger's own seq. The first record is
+    # "record 1", not "record 0": an examiner reading "0" goes looking for a
+    # record that does not exist, or worse, checks the one before the damage.
+    assert "BROKEN at record 1 of" in out, out
+
+
+def test_the_second_record_is_reported_as_record_two() -> None:
+    """The off-by-one this guards against blamed seq 1 when seq 2 was edited."""
+    data = _packet(ED25519)
+    data["records"][1]["decision_outcome"] = {"g": 9999.00}
+    code, out = _run(data)
+    assert code == 1
+    assert "BROKEN at record 2 of" in out, out
+    assert "record 0" not in out, out
 
 
 def test_a_deleted_record_is_caught() -> None:

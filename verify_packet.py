@@ -167,18 +167,20 @@ def main(path, anchor=None):
     signatures_checked = 0
     signatures_skipped = False
 
-    for index, record in enumerate(records):
+    # Records are numbered from 1, matching the ledger's own `seq`. Reporting a
+    # 0-based offset sends an examiner to the record before the damaged one.
+    for position, record in enumerate(records, start=1):
         rid = record.get("record_id", "?")
 
         if record.get("prev_hash") != prev:
-            print(f"  BROKEN at record {index} ({rid})")
+            print(f"  BROKEN at record {position} of {len(records)} ({rid})")
             print("    its prev_hash does not match the record before it -- something was")
             print("    altered, removed, or inserted at or before this point.")
             return 1
 
         expected = record_hash(record, prev)
         if record.get("hash") != expected:
-            print(f"  BROKEN at record {index} ({rid})")
+            print(f"  BROKEN at record {position} of {len(records)} ({rid})")
             print("    its contents no longer hash to the value stored with it -- this")
             print("    record was edited after it was written.")
             return 1
@@ -191,7 +193,7 @@ def main(path, anchor=None):
             if result is None:
                 signatures_skipped = True
             elif result is False:
-                print(f"  BROKEN at record {index} ({rid})")
+                print(f"  BROKEN at record {position} of {len(records)} ({rid})")
                 print(f"    its {algorithm} signature does not verify against the public")
                 print("    key in this packet.")
                 return 1

@@ -260,9 +260,10 @@ def cmd_verify(args) -> int:
     try:
         verify_chain(records, public)
     except ChainError as exc:
-        print(f"BROKEN at record {exc.index} ({exc.record_id})")
+        print(f"BROKEN at record {exc.position} of {len(records)} ({exc.record_id})")
         print(f"  {exc.reason}")
-        print(f"\n{len(records)} records read; everything from {exc.index} onward is unreliable.")
+        print(f"\n{len(records)} records read; everything from record {exc.position} "
+              "onward is unreliable.")
         return 1
 
     how = (f"hash chain and {algorithm} signatures" if public
