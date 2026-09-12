@@ -196,3 +196,17 @@ def test_ci_runs_the_starter_policy_as_a_principal_it_approves() -> None:
     assert run.group(1) in approved, (
         f"CI runs as {run.group(1)!r}; the starter approves {approved}"
     )
+
+
+if __name__ == "__main__":
+    failures = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                print(f"PASS {name}")
+            except AssertionError as exc:
+                failures += 1
+                print(f"FAIL {name}: {exc}")
+    print(f"\n{failures} failure(s)")
+    raise SystemExit(1 if failures else 0)

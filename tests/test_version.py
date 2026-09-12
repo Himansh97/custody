@@ -26,3 +26,17 @@ def test_the_package_version_matches_pyproject() -> None:
     assert custody.__version__ == declared.group(1), (
         f"__init__ says {custody.__version__}, pyproject says {declared.group(1)}"
     )
+
+
+if __name__ == "__main__":
+    failures = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                print(f"PASS {name}")
+            except AssertionError as exc:
+                failures += 1
+                print(f"FAIL {name}: {exc}")
+    print(f"\n{failures} failure(s)")
+    raise SystemExit(1 if failures else 0)
