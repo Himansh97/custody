@@ -131,6 +131,38 @@ def cmd_keygen(args) -> int:
     return 0
 
 
+def _replay_fixture(spec: str) -> dict:
+    """Load a `--replay` fixture, or fail the way the rest of the CLI fails.
+
+    A replay fixture is a file a person typed the path to, so every way it can
+    be wrong is a user error, not a bug. Letting json.loads or read_text raise
+    put a Python traceback in front of someone whose actual problem was a typo,
+    and buried the one line that would have told them so.
+    """
+    path = pathlib.Path(spec)
+    if not path.exists():
+        raise SystemExit(f"no such replay fixture: {path}")
+    if path.is_dir():
+        raise SystemExit(f"replay fixture is a directory, not a file: {path}")
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise SystemExit(f"cannot read replay fixture {path}: {exc.strerror}") from None
+    try:
+        fixture = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"replay fixture {path} is not valid JSON: {exc.msg} "
+            f"(line {exc.lineno}, column {exc.colno})"
+        ) from None
+    if not isinstance(fixture, dict):
+        raise SystemExit(
+            f"replay fixture {path} should be a JSON object with a 'fields' key, "
+            f"got {type(fixture).__name__}"
+        )
+    return fixture
+
+
 # ---------------------------------------------------------------------- run
 
 def cmd_run(args) -> int:
@@ -147,7 +179,7 @@ def cmd_run(args) -> int:
         documents.append((path.stem, path.read_text(encoding="utf-8", errors="replace")))
 
     if args.replay:
-        fixture = json.loads(pathlib.Path(args.replay).read_text())
+        fixture = _replay_fixture(args.replay)
         extract = replay(fixture.get("fields", {}), fixture.get("confidence"),
                          fixture.get("citations"), model=args.model)
     elif args.provider == "azure-openai":
@@ -523,7 +555,7 @@ def _extractor(args):
     from .adapters import anthropic_extractor, azure_openai_extractor, replay
 
     if args.replay:
-        fixture = json.loads(pathlib.Path(args.replay).read_text())
+        fixture = _replay_fixture(args.replay)
         return replay(fixture.get("fields", {}), fixture.get("confidence"),
                       fixture.get("citations"), model=args.model)
     if args.provider == "azure-openai":
