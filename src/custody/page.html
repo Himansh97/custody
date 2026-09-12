@@ -747,9 +747,11 @@ async function runVerify(){
     $("statusSub").textContent =
       "every hash recomputed in your browser from the record contents";
   } else {
-    brokenAt = result.index;
+    brokenAt = result.index;   // 0-based: used to shade rows from here down
     el.className = "status bad";
-    $("statusMain").textContent = "Chain broken at record " + result.index;
+    // Read by a person, so numbered from 1 like the ledger's own seq.
+    $("statusMain").textContent =
+      "Chain broken at record " + (result.index + 1) + " of " + records.length;
     $("statusSub").textContent = result.id + " — " + result.reason;
   }
   render();
