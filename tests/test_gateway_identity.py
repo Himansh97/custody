@@ -204,3 +204,17 @@ def test_an_identities_file_that_is_not_token_to_principal_is_refused() -> None:
             raise AssertionError("a list principal was accepted")
         except SystemExit:
             pass
+
+
+if __name__ == "__main__":
+    failures = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                print(f"PASS {name}")
+            except AssertionError as exc:
+                failures += 1
+                print(f"FAIL {name}: {exc}")
+    print(f"\n{failures} failure(s)")
+    raise SystemExit(1 if failures else 0)
