@@ -181,19 +181,6 @@ def test_non_ascii_is_escaped_rather_than_emitted_raw() -> None:
     assert "é".encode("utf-8") not in out
 
 
-if __name__ == "__main__":
-    failures = 0
-    for name, fn in sorted(globals().items()):
-        if name.startswith("test_") and callable(fn):
-            try:
-                fn()
-                print(f"PASS {name}")
-            except AssertionError as exc:
-                failures += 1
-                print(f"FAIL {name}: {exc}")
-    print(f"\n{failures} failure(s)")
-    raise SystemExit(1 if failures else 0)
-
 def test_the_break_is_numbered_from_one_for_people() -> None:
     """`index` is a 0-based offset; `position` is what an examiner reads.
 
@@ -212,3 +199,17 @@ def test_the_break_is_numbered_from_one_for_people() -> None:
         assert "record 2" in str(exc), str(exc)
     else:
         raise AssertionError("a tampered record should break the chain")
+
+
+if __name__ == "__main__":
+    failures = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                print(f"PASS {name}")
+            except AssertionError as exc:
+                failures += 1
+                print(f"FAIL {name}: {exc}")
+    print(f"\n{failures} failure(s)")
+    raise SystemExit(1 if failures else 0)
