@@ -334,7 +334,7 @@ footer a{color:inherit}
     </div>
     <div class="controls">
       <button class="primary" id="btnVerify">Verify chain</button>
-      <button class="danger" id="btnTamper">Tamper with record 1</button>
+      <button class="danger" id="btnTamper">Tamper with record 2</button>
       <button id="btnRestore" disabled>Restore</button>
     </div>
   </div>
@@ -570,7 +570,7 @@ function renderChain(){
     b.setAttribute("aria-selected", i === selected ? "true" : "false");
     var badge = verdictBadge(r);
     b.innerHTML =
-      '<span class="n">' + i + '</span>' +
+      '<span class="n">' + (i + 1) + '</span>' +
       '<span class="what"><b></b><span></span></span>' +
       '<span class="badge ' + badge[0] + '">' + badge[1] + '</span>' +
       '<span class="hash">' + r.hash.slice(0, 16) + '…</span>';
@@ -770,7 +770,7 @@ $("btnTamper").addEventListener("click", function(){
   $("btnRestore").disabled = false;
   $("tamperNote").hidden = false;
   $("tamperNote").innerHTML =
-    "<strong>Record 1 has been edited</strong> — its rejection is now recorded as a " +
+    "<strong>Record 2 has been edited</strong> — its rejection is now recorded as a " +
     "pass, and the finding that named the invented figure is gone. The record reads " +
     "as though the model was right. Press <b>Verify chain</b>.";
   $("status").className = "status";
